@@ -37,37 +37,35 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="mb-8 p-6 bg-slate-900 rounded-xl border border-slate-800 max-w-md">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-bold">Account Settings</h2>
-        <button onClick={onClose} className="text-slate-400 hover:text-white text-sm">✕ Close</button>
+    <div className="mb-8 max-w-md rounded-2xl border border-green-200 bg-white p-6 shadow-xl">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-bold text-gray-900">Account Settings</h2>
+        <button onClick={onClose} className="text-sm text-gray-500 transition hover:text-gray-900">✕ Close</button>
       </div>
 
-      {/* Change Password */}
-      <form onSubmit={handleChangePassword} className="space-y-3 mb-6">
-        <label className="block text-sm text-slate-400">Change Password</label>
+      <form onSubmit={handleChangePassword} className="mb-6 space-y-3">
+        <label className="block text-sm text-gray-500">Change Password</label>
         <input
           type="password"
           placeholder="New Password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
-          className="w-full p-2 bg-slate-800 border border-slate-700 rounded text-white text-sm"
+          className="w-full rounded-xl border border-green-200 bg-green-50/50 px-3 py-2 text-sm text-gray-900 focus:border-green-500 focus:outline-none"
         />
         <button
           type="submit"
-          className="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold transition"
+          className="w-full rounded-xl bg-green-500 py-2 text-sm font-semibold text-white transition hover:bg-green-600"
         >
           Update Password
         </button>
       </form>
-      {statusMessage && <p className="text-sm text-green-400 mb-4">{statusMessage}</p>}
+      {statusMessage && <p className="mb-4 text-sm text-green-600">{statusMessage}</p>}
 
-      {/* Delete Account */}
-      <div className="pt-4 border-t border-slate-800">
-        <label className="block text-sm text-red-400 mb-2">Danger Zone</label>
+      <div className="border-t border-green-100 pt-4">
+        <label className="mb-2 block text-sm font-medium text-gray-900">Danger Zone</label>
         <button
           onClick={handleDeleteAccount}
-          className="w-full py-2 bg-red-950 text-red-400 border border-red-800 hover:bg-red-900 rounded text-sm font-semibold transition"
+          className="w-full rounded-xl border border-gray-300 bg-gray-50 py-2 text-sm font-semibold text-gray-900 transition hover:bg-gray-100"
         >
           Delete Account
         </button>

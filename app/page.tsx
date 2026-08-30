@@ -10,13 +10,16 @@ import {
 } from 'lucide-react';
 import { db } from '../firebase';
 import { 
-  collection, addDoc, query, orderBy, deleteDoc, doc, 
+  collection, addDoc, query, deleteDoc, doc, 
   updateDoc, where, onSnapshot 
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import LoginModal from '../components/LoginModal';
 import NicknameModal from '../components/NicknameModal';
 import SettingsModal from '../components/SettingsModal';
+import AnimatedNumber from '../components/AnimatedNumber';
+import BottomNav from '../components/BottomNav';
+import SectionHeader from '../components/SectionHeader';
 
 // --- Constants ---
 const SMART_AI_INCOMES = [
@@ -37,12 +40,12 @@ function Modal({ isOpen, onClose, title, children }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-[#202124] rounded-2xl border border-[#5f6368] shadow-2xl p-5 text-[#e8eaed]">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-xs" onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-white rounded-2xl border border-green-200 shadow-2xl shadow-green-900/10 p-5 text-gray-900 animate-scale-in">
         <div className="flex justify-between items-center mb-3">
           <h3 className="text-base font-medium">{title}</h3>
-          <button onClick={onClose} className="p-1 hover:bg-[#3c4043] rounded-full transition-colors">
-            <X size={18} className="text-[#9aa0a6]" />
+          <button onClick={onClose} className="p-1 hover:bg-green-100 rounded-full transition-colors">
+            <X size={18} className="text-gray-500" />
           </button>
         </div>
         {children}
@@ -63,24 +66,24 @@ function FareModal({ isOpen, onClose, onConfirm, date, defaultFare }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Transport Fare - ${date.toLocaleDateString()}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <p className="text-xs text-[#9aa0a6]">Enter round-trip transport fare for this session:</p>
-        <div className="flex items-center gap-2 bg-[#303134] border border-[#5f6368] rounded-xl px-3 py-2">
-          <span className="text-sm font-medium text-[#9aa0a6]">৳</span>
+        <p className="text-xs text-gray-500">Enter round-trip transport fare for this session:</p>
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
+          <span className="text-sm font-medium text-gray-500">৳</span>
           <input
             type="number"
             step="any"
             value={fare}
             onChange={(e) => setFare(e.target.value)}
-            className="flex-1 bg-transparent font-medium text-base text-[#8ab4f8] focus:outline-none"
+            className="flex-1 bg-transparent font-medium text-base text-green-600 focus:outline-none"
             autoFocus
             required
           />
         </div>
         <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className="px-4 py-2 hover:bg-[#3c4043] rounded-lg text-xs font-medium text-[#8ab4f8] transition-colors">
+          <button type="button" onClick={onClose} className="px-4 py-2 hover:bg-green-100 rounded-lg text-xs font-medium text-green-600 transition-colors">
             Cancel
           </button>
-          <button type="submit" className="px-4 py-2 bg-[#8ab4f8] hover:bg-[#aecbfa] text-[#202124] rounded-lg text-xs font-medium transition-colors">
+          <button type="submit" className="px-4 py-2 bg-green-500 hover:bg-green-400 text-white rounded-lg text-xs font-medium transition-colors">
             Confirm
           </button>
         </div>
@@ -93,12 +96,12 @@ function DeleteConfirmModal({ isOpen, onClose, onConfirm }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Delete Item">
       <div className="space-y-4">
-        <p className="text-xs text-[#9aa0a6]">Are you sure you want to delete this item? This cannot be undone.</p>
+        <p className="text-xs text-gray-500">Are you sure you want to delete this item? This cannot be undone.</p>
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 hover:bg-[#3c4043] rounded-lg text-xs font-medium text-[#8ab4f8] transition-colors">
+          <button onClick={onClose} className="px-4 py-2 hover:bg-green-100 rounded-lg text-xs font-medium text-green-600 transition-colors">
             Cancel
           </button>
-          <button onClick={() => { onConfirm(); onClose(); }} className="px-4 py-2 bg-[#f28b82] hover:bg-[#f6aea9] text-[#202124] rounded-lg text-xs font-medium transition-colors">
+          <button onClick={() => { onConfirm(); onClose(); }} className="px-4 py-2 bg-gray-900 hover:bg-gray-700 text-white rounded-lg text-xs font-medium transition-colors">
             Delete
           </button>
         </div>
@@ -119,15 +122,15 @@ function BudgetModal({ isOpen, onClose, categories, budgets, onSave }) {
     <Modal isOpen={isOpen} onClose={onClose} title="Set Budget Limits">
       <div className="space-y-4 max-h-96 overflow-y-auto pr-1">
         {categories.filter(c => c.type === 'expense').map(cat => (
-          <div key={cat.name} className="flex items-center gap-3 bg-[#303134] p-3 rounded-xl">
-            <span className="text-xs flex-1 text-[#e8eaed]">{cat.name}</span>
-            <div className="flex items-center gap-1 bg-[#202124] border border-[#5f6368] px-2 py-1 rounded-lg">
-              <span className="text-[10px] text-[#9aa0a6]">৳</span>
+          <div key={cat.name} className="flex items-center gap-3 bg-green-50 p-3 rounded-xl">
+            <span className="text-xs flex-1 text-gray-900">{cat.name}</span>
+            <div className="flex items-center gap-1 bg-white border border-green-200 px-2 py-1 rounded-lg">
+              <span className="text-[10px] text-gray-500">৳</span>
               <input
                 type="number"
                 value={budgetData[cat.name] || 0}
                 onChange={(e) => setBudgetData({ ...budgetData, [cat.name]: parseFloat(e.target.value) || 0 })}
-                className="w-20 bg-transparent text-xs font-medium text-[#8ab4f8] focus:outline-none"
+                className="w-20 bg-transparent text-xs font-medium text-green-600 focus:outline-none"
                 placeholder="0"
               />
             </div>
@@ -135,7 +138,7 @@ function BudgetModal({ isOpen, onClose, categories, budgets, onSave }) {
         ))}
         <button 
           onClick={handleSave}
-          className="w-full bg-[#8ab4f8] hover:bg-[#aecbfa] text-[#202124] font-medium py-2.5 rounded-xl transition-colors text-sm mt-2"
+          className="w-full bg-green-500 hover:bg-green-400 text-white font-medium py-2.5 rounded-xl transition-colors text-sm mt-2"
         >
           Save Budgets
         </button>
@@ -163,40 +166,40 @@ function AddTuitionModal({ isOpen, onClose, onConfirm }) {
     <Modal isOpen={isOpen} onClose={onClose} title="Add Tuition">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-xs font-medium text-[#9aa0a6] mb-1">Tuition Name</label>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Tuition Name</label>
           <input
             type="text"
             placeholder="e.g. Math, Physics, Student A"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full bg-[#303134] border border-[#5f6368] focus:border-[#8ab4f8] p-3 rounded-xl text-sm text-[#e8eaed] focus:outline-none"
+            className="w-full bg-green-50 border border-green-200 focus:border-green-500 p-3 rounded-xl text-sm text-gray-900 focus:outline-none"
             required
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#9aa0a6] mb-1">Monthly Day Goal</label>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Monthly Day Goal</label>
           <input
             type="number"
             min="1"
             value={targetDays}
             onChange={(e) => setTargetDays(e.target.value)}
-            className="w-full bg-[#303134] border border-[#5f6368] focus:border-[#81c995] p-3 rounded-xl text-sm text-[#e8eaed] focus:outline-none"
+            className="w-full bg-green-50 border border-green-200 focus:border-green-500 p-3 rounded-xl text-sm text-gray-900 focus:outline-none"
             required
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#9aa0a6] mb-1">Transport Fare / Trip (৳)</label>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Transport Fare / Trip (৳)</label>
           <input
             type="number"
             min="0"
             step="any"
             value={defaultFare}
             onChange={(e) => setDefaultFare(e.target.value)}
-            className="w-full bg-[#303134] border border-[#5f6368] focus:border-[#81c995] p-3 rounded-xl text-sm text-[#e8eaed] focus:outline-none"
+            className="w-full bg-green-50 border border-green-200 focus:border-green-500 p-3 rounded-xl text-sm text-gray-900 focus:outline-none"
             required
           />
         </div>
-        <button type="submit" className="w-full bg-[#8ab4f8] hover:bg-[#aecbfa] text-[#202124] font-medium py-2.5 rounded-xl transition-colors text-sm">
+        <button type="submit" className="w-full bg-green-500 hover:bg-green-400 text-white font-medium py-2.5 rounded-xl transition-colors text-sm">
           Add Tuition
         </button>
       </form>
@@ -207,6 +210,7 @@ function AddTuitionModal({ isOpen, onClose, onConfirm }) {
 // --- MAIN COMPONENT ---
 export default function TrackerApp() {
   const { user, nickname, loading: authLoading, logout } = useAuth();
+  const [mounted, setMounted] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   const [activeTab, setActiveTab] = useState('home');
@@ -284,6 +288,10 @@ export default function TrackerApp() {
   }, []);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (!user) {
       clearUserData();
       return;
@@ -293,13 +301,11 @@ export default function TrackerApp() {
 
     const txQuery = query(
       collection(db, 'transactions'),
-      where('userId', '==', user.uid),
-      orderBy('date', 'desc')
+      where('userId', '==', user.uid)
     );
     const tuitionQuery = query(
       collection(db, 'tuition'),
-      where('userId', '==', user.uid),
-      orderBy('date', 'desc')
+      where('userId', '==', user.uid)
     );
     const tuitionProfilesQuery = query(
       collection(db, 'tuitionProfiles'),
@@ -310,7 +316,9 @@ export default function TrackerApp() {
       txQuery,
       (snapshot) => {
         try {
-          const txList = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+          const txList = snapshot.docs
+            .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+            .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
           applyTransactions(txList);
           setLoading(false);
         } catch (error) {
@@ -328,7 +336,9 @@ export default function TrackerApp() {
       tuitionQuery,
       (snapshot) => {
         try {
-          const tuitionList = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+          const tuitionList = snapshot.docs
+            .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+            .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
           setTuitionSessions(tuitionList);
         } catch (error) {
           console.error('Error processing tuition snapshot:', error);
@@ -637,10 +647,10 @@ export default function TrackerApp() {
     return Object.entries(months).slice(-6);
   }, [transactions]);
 
-  if (authLoading || loading) {
+  if (!mounted || authLoading || loading) {
     return (
-      <div className="min-h-screen bg-[#202124] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#8ab4f8] border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-[#f8fdf9] flex items-center justify-center" suppressHydrationWarning>
+        <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -651,7 +661,7 @@ export default function TrackerApp() {
   const initials = nickname.slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-[#202124] text-[#e8eaed] flex flex-col font-sans pb-24">
+    <div className="min-h-screen bg-[#f8fdf9] text-gray-900 flex flex-col font-sans pb-28" suppressHydrationWarning>
       
       {/* --- MODALS --- */}
       <FareModal
@@ -685,7 +695,7 @@ export default function TrackerApp() {
 
       {showSettings && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setShowSettings(false)} />
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-xs" onClick={() => setShowSettings(false)} />
           <div className="relative z-10">
             <SettingsModal onClose={() => setShowSettings(false)} />
           </div>
@@ -693,124 +703,121 @@ export default function TrackerApp() {
       )}
 
       {/* --- HEADER --- */}
-      <header className="px-4 py-3 max-w-md mx-auto w-full flex justify-between items-center bg-[#202124] border-b border-[#5f6368]/40 sticky top-0 z-40">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[#8ab4f8]/20 flex items-center justify-center text-[#8ab4f8]">
-            <Wallet size={18} />
+      <header className="sticky top-0 z-40 mx-auto w-full max-w-md animate-fade-up">
+        <div className="mx-3 mt-3 flex items-center justify-between rounded-2xl border border-green-200/80 glass-card px-4 py-3 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500 text-white shadow-lg shadow-green-500/30 animate-float-gentle">
+              <Wallet size={20} />
+            </div>
+            <div>
+              <span className="block text-[10px] font-medium uppercase tracking-widest text-green-600">KeepNotes</span>
+              <span className="text-sm font-bold text-gray-900">Hi, {nickname} 👋</span>
+            </div>
           </div>
-          <span className="font-medium text-base text-[#e8eaed] tracking-wide">KeepNotes & Finance</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button onClick={exportData} className="p-2 hover:bg-[#3c4043] rounded-full text-[#9aa0a6] transition-colors" title="Export CSV">
-            <Download size={18} />
-          </button>
-          <button onClick={() => setShowBudgetModal(true)} className="p-2 hover:bg-[#3c4043] rounded-full text-[#9aa0a6] transition-colors" title="Set Budgets">
-            <Target size={18} />
-          </button>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="w-8 h-8 rounded-full bg-[#5f6368] hover:bg-[#6f7378] flex items-center justify-center text-white text-xs font-medium transition-colors"
-            title={`${nickname} — Account Settings`}
-          >
-            {initials}
-          </button>
-          <button onClick={handleLogout} className="p-2 hover:bg-[#3c4043] rounded-full text-[#9aa0a6] transition-colors" title="Log Out">
-            <LogOut size={18} />
-          </button>
+          <div className="flex items-center gap-0.5">
+            <button onClick={exportData} className="rounded-xl p-2 text-gray-500 transition-all hover:scale-110 hover:bg-green-50 hover:text-green-600" title="Export CSV">
+              <Download size={18} />
+            </button>
+            <button onClick={() => setShowBudgetModal(true)} className="rounded-xl p-2 text-gray-500 transition-all hover:scale-110 hover:bg-green-50 hover:text-green-600" title="Set Budgets">
+              <Target size={18} />
+            </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-green-600 text-xs font-bold text-white shadow-md shadow-green-500/30 transition-all hover:scale-105 hover:bg-green-700"
+              title={`${nickname} — Account Settings`}
+            >
+              {initials}
+            </button>
+            <button onClick={handleLogout} className="rounded-xl p-2 text-gray-500 transition-all hover:scale-110 hover:bg-green-50" title="Log Out">
+              <LogOut size={18} />
+            </button>
+          </div>
         </div>
       </header>
 
       {/* --- MAIN CONTENT --- */}
-      <main className="flex-1 p-3 max-w-md mx-auto w-full space-y-3">
+      <main className="flex-1 p-3 max-w-md mx-auto w-full" key={activeTab}>
         
         {/* HOME TAB */}
         {activeTab === 'home' && (
-          <div className="space-y-3 animate-in fade-in duration-200">
-            
-            {/* Balance Card */}
-            <div className="bg-[#202124] border border-[#5f6368] hover:border-[#8ab4f8]/50 transition-all rounded-2xl p-4 shadow-sm">
-              <div className="flex justify-between items-start">
-                <div>
-                  <span className="text-[11px] font-medium text-[#9aa0a6] uppercase tracking-wider block mb-1">Total Balance</span>
-                  <h2 className={`text-3xl font-normal tracking-tight ${currentBalance < 0 ? 'text-[#f28b82]' : 'text-[#e8eaed]'}`}>
-                    ৳{currentBalance.toLocaleString()}
-                  </h2>
+          <div className="animate-tab-enter space-y-4">
+
+            {/* Hero balance */}
+            <div className="hero-gradient shimmer-wrap relative overflow-hidden rounded-3xl p-5 text-white shadow-xl shadow-green-900/20 animate-scale-in">
+              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 animate-pulse-soft" />
+              <div className="absolute -bottom-6 -left-6 h-24 w-24 rounded-full bg-white/5 animate-spin-slow" />
+              <div className="relative">
+                <span className="text-[11px] font-medium uppercase tracking-widest text-green-100">Total Balance</span>
+                <h2 className="mt-1 text-4xl font-bold tracking-tight">
+                  <AnimatedNumber value={Math.abs(currentBalance)} prefix={currentBalance < 0 ? '-৳' : '৳'} />
+                </h2>
+                <div className="mt-4 flex gap-3">
+                  <div className="flex-1 rounded-2xl bg-white/15 px-3 py-2 backdrop-blur-sm">
+                    <span className="text-[10px] text-green-100">Income</span>
+                    <p className="text-sm font-semibold">৳{totalIncome.toLocaleString()}</p>
+                  </div>
+                  <div className="flex-1 rounded-2xl bg-white/15 px-3 py-2 backdrop-blur-sm">
+                    <span className="text-[10px] text-green-100">Spent</span>
+                    <p className="text-sm font-semibold">৳{totalExpense.toLocaleString()}</p>
+                  </div>
                 </div>
-                <button onClick={() => setShowAnalytics(!showAnalytics)} className="p-2 hover:bg-[#3c4043] rounded-full transition-colors">
-                  <PieChart size={18} className="text-[#9aa0a6]" />
+                <button
+                  onClick={() => setShowAnalytics(!showAnalytics)}
+                  className="mt-3 flex items-center gap-1.5 text-xs text-green-100 transition hover:text-white"
+                >
+                  <PieChart size={14} className={showAnalytics ? 'rotate-180 transition-transform duration-500' : 'transition-transform duration-500'} />
+                  {showAnalytics ? 'Hide trends' : 'Show trends'}
                 </button>
               </div>
-
-              <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-[#3c4043]">
-                <div>
-                  <span className="text-[10px] text-[#9aa0a6] block">Income</span>
-                  <span className="text-sm font-medium text-[#81c995]">৳{totalIncome.toLocaleString()}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-[#9aa0a6] block">Expenses</span>
-                  <span className="text-sm font-medium text-[#f28b82]">৳{totalExpense.toLocaleString()}</span>
-                </div>
-              </div>
-
-              {/* Budget Alerts */}
-              {Object.entries(budgetLimits).map(([category, limit]) => {
-                const status = getBudgetStatus(category);
-                if (status.percentage > 80 && status.budget > 0) {
-                  return (
-                    <div key={category} className="mt-2 p-2 bg-[#f28b82]/10 border border-[#f28b82]/30 rounded-xl flex items-center gap-2">
-                      <AlertCircle size={14} className="text-[#f28b82]" />
-                      <span className="text-[10px] text-[#f28b82]">
-                        {category}: {status.percentage.toFixed(0)}% of budget used
-                      </span>
-                    </div>
-                  );
-                }
-                return null;
-              })}
             </div>
 
-            {/* Today & Streak */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-[#202124] border border-[#5f6368] rounded-2xl p-3.5 shadow-sm">
-                <span className="text-[10px] font-medium text-[#9aa0a6] uppercase tracking-wider block mb-1">Today</span>
-                <p className={`text-lg font-medium ${todayNet >= 0 ? 'text-[#81c995]' : 'text-[#f28b82]'}`}>
-                  ৳{todayNet.toLocaleString()}
+            {/* Stat pills — horizontal scroll */}
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide animate-fade-up stagger-2">
+              <div className="shrink-0 rounded-2xl border border-green-200 bg-white px-4 py-3 shadow-sm hover-lift">
+                <span className="text-[10px] font-medium uppercase text-gray-500">Today</span>
+                <p className={`text-lg font-bold ${todayNet >= 0 ? 'text-green-600' : 'text-gray-900'}`}>৳{todayNet.toLocaleString()}</p>
+              </div>
+              <div className="shrink-0 rounded-2xl border border-green-200 bg-white px-4 py-3 shadow-sm hover-lift">
+                <span className="text-[10px] font-medium uppercase text-gray-500">Month</span>
+                <p className={`text-lg font-bold ${monthBalance >= 0 ? 'text-green-600' : 'text-gray-900'}`}>৳{monthBalance.toLocaleString()}</p>
+              </div>
+              <div className="shrink-0 rounded-2xl border border-green-200 bg-white px-4 py-3 shadow-sm hover-lift">
+                <span className="text-[10px] font-medium uppercase text-gray-500">🔥 Streak</span>
+                <p className="text-lg font-bold text-green-700">{streakInfo.streak} days</p>
+              </div>
+              <div className="shrink-0 rounded-2xl border border-green-200 bg-white px-4 py-3 shadow-sm hover-lift">
+                <span className="text-[10px] font-medium uppercase text-gray-500">Tuition</span>
+                <p className="text-lg font-bold text-green-600">
+                  {homeTuition ? `${homeSessionsDone}/${homeTargetSessions}` : '—'}
                 </p>
-                <div className="text-[10px] text-[#9aa0a6] mt-1 flex justify-between">
-                  <span>+৳{todayIncome}</span>
-                  <span>-৳{todayExpense}</span>
-                </div>
-              </div>
-
-              <div className="bg-[#202124] border border-[#5f6368] rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
-                <span className="text-[10px] font-medium text-[#9aa0a6] uppercase tracking-wider block">Tuition Streak</span>
-                <div className="flex items-center gap-2 my-1">
-                  <span className="text-xl">🔥</span>
-                  <span className="text-lg font-medium text-[#fadd6d]">{streakInfo.streak} Days</span>
-                </div>
-                <span className="text-[10px] text-[#9aa0a6]">
-                  {homeTuition ? `Target: ${homeSessionsDone}/${homeTargetSessions}` : 'No tuition set'}
-                </span>
               </div>
             </div>
 
-            {/* Analytics Section */}
+            {/* Budget alerts */}
+            {Object.entries(budgetLimits).map(([cat, limit]) => {
+              const status = getBudgetStatus(cat);
+              if (status.percentage > 80 && status.budget > 0) {
+                return (
+                  <div key={cat} className="animate-fade-up flex items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2">
+                    <AlertCircle size={14} className="shrink-0 text-gray-900" />
+                    <span className="text-[10px] text-gray-700">{cat}: {status.percentage.toFixed(0)}% of budget</span>
+                  </div>
+                );
+              }
+              return null;
+            })}
+
+            {/* Analytics */}
             {showAnalytics && (
-              <div className="bg-[#202124] border border-[#5f6368] rounded-2xl p-4 shadow-sm animate-in fade-in duration-200">
-                <h3 className="text-xs font-medium text-[#9aa0a6] uppercase tracking-wider mb-3">Monthly Trend</h3>
-                <div className="space-y-2">
-                  {getMonthlyTrend.map(([month, data]) => (
-                    <div key={month} className="flex items-center gap-2">
-                      <span className="text-[10px] text-[#9aa0a6] w-16">{month}</span>
-                      <div className="flex-1 h-2 bg-[#303134] rounded-full overflow-hidden flex">
-                        <div 
-                          className="h-full bg-[#81c995] transition-all"
-                          style={{ width: `${(data.income / Math.max(...getMonthlyTrend.map(([,d]) => d.income + d.expense))) * 100}%` }}
-                        />
-                        <div 
-                          className="h-full bg-[#f28b82] transition-all"
-                          style={{ width: `${(data.expense / Math.max(...getMonthlyTrend.map(([,d]) => d.income + d.expense))) * 100}%` }}
-                        />
+              <div className="animate-scale-in rounded-3xl border border-green-200 bg-white p-4 shadow-sm">
+                <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-500">6-Month Trend</h3>
+                <div className="space-y-3">
+                  {getMonthlyTrend.map(([month, data], i) => (
+                    <div key={month} className="animate-fade-up flex items-center gap-3" style={{ animationDelay: `${i * 0.06}s` }}>
+                      <span className="w-14 text-[10px] font-medium text-gray-500">{month}</span>
+                      <div className="flex h-3 flex-1 overflow-hidden rounded-full bg-green-50">
+                        <div className="h-full rounded-full bg-green-500 transition-all duration-1000" style={{ width: `${(data.income / Math.max(...getMonthlyTrend.map(([,d]) => d.income + d.expense), 1)) * 100}%` }} />
+                        <div className="h-full rounded-full bg-gray-900 transition-all duration-1000" style={{ width: `${(data.expense / Math.max(...getMonthlyTrend.map(([,d]) => d.income + d.expense), 1)) * 100}%` }} />
                       </div>
                     </div>
                   ))}
@@ -818,105 +825,66 @@ export default function TrackerApp() {
               </div>
             )}
 
-            {/* Navigation Cards */}
-            <div className="grid grid-cols-1 gap-2.5">
-              <button 
-                onClick={() => setActiveTab('expense-hub')}
-                className="w-full bg-[#202124] border border-[#5f6368] hover:border-[#8ab4f8] p-4 rounded-2xl flex items-center justify-between transition-all text-left group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#8ab4f8]/10 text-[#8ab4f8] flex items-center justify-center">
-                    <PlusCircle size={20} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-[#e8eaed]">Log & Track Expenses</h3>
-                    <p className="text-[11px] text-[#9aa0a6]">Add income or quick daily expenses</p>
-                  </div>
+            {/* Bento action grid */}
+            <div className="grid grid-cols-2 gap-3 animate-fade-up stagger-3">
+              <button onClick={() => setActiveTab('expense-hub')} className="hover-lift col-span-2 flex items-center gap-4 rounded-3xl border border-green-200 bg-white p-4 text-left shadow-sm">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-500 text-white shadow-lg shadow-green-500/30">
+                  <PlusCircle size={24} />
                 </div>
-                <ChevronRight size={18} className="text-[#9aa0a6]" />
-              </button>
-
-              <button 
-                onClick={() => setActiveTab('history')}
-                className="w-full bg-[#202124] border border-[#5f6368] hover:border-[#c58af9] p-4 rounded-2xl flex items-center justify-between transition-all text-left group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#c58af9]/10 text-[#c58af9] flex items-center justify-center">
-                    <Clock size={20} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-[#e8eaed]">Month-wise Ledger</h3>
-                    <p className="text-[11px] text-[#9aa0a6]">View transaction history</p>
-                  </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-gray-900">Log & Track</h3>
+                  <p className="text-[11px] text-gray-500">Income & expenses</p>
                 </div>
-                <ChevronRight size={18} className="text-[#9aa0a6]" />
+                <ChevronRight size={20} className="text-green-500" />
               </button>
-
-              <button 
-                onClick={() => setActiveTab('tuition')}
-                className="w-full bg-[#202124] border border-[#5f6368] hover:border-[#81c995] p-4 rounded-2xl flex items-center justify-between transition-all text-left group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#81c995]/10 text-[#81c995] flex items-center justify-center">
-                    <BookOpen size={20} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-[#e8eaed]">Tuition Calendar</h3>
-                    <p className="text-[11px] text-[#9aa0a6]">Custom day goals & fare sync</p>
-                  </div>
-                </div>
-                <ChevronRight size={18} className="text-[#9aa0a6]" />
+              <button onClick={() => setActiveTab('history')} className="hover-lift rounded-3xl border border-green-200 bg-white p-4 text-left shadow-sm">
+                <Clock size={22} className="mb-2 text-green-600" />
+                <h3 className="text-sm font-bold text-gray-900">Ledger</h3>
+                <p className="text-[10px] text-gray-500">History</p>
               </button>
-
-              {/* Quick Actions */}
-              <div className="grid grid-cols-2 gap-2">
-                <button 
-                  onClick={() => { setActiveTab('add-money'); setAmount(''); setCategory(''); }}
-                  className="bg-[#303134] border border-[#5f6368] hover:border-[#81c995] p-3 rounded-xl text-xs font-medium text-[#81c995] transition-colors"
-                >
-                  Quick Add Income
-                </button>
-                <button 
-                  onClick={() => { setActiveTab('add-expense'); setAmount(''); setCategory(''); }}
-                  className="bg-[#303134] border border-[#5f6368] hover:border-[#f28b82] p-3 rounded-xl text-xs font-medium text-[#f28b82] transition-colors"
-                >
-                  Quick Add Expense
-                </button>
-              </div>
+              <button onClick={() => setActiveTab('tuition')} className="hover-lift rounded-3xl border border-green-200 bg-white p-4 text-left shadow-sm">
+                <BookOpen size={22} className="mb-2 text-green-600" />
+                <h3 className="text-sm font-bold text-gray-900">Tuition</h3>
+                <p className="text-[10px] text-gray-500">Calendar</p>
+              </button>
+              <button onClick={() => { setActiveTab('add-money'); setAmount(''); setCategory(''); }} className="hover-lift rounded-2xl bg-green-500 py-3 text-xs font-bold text-white shadow-md shadow-green-500/25">
+                + Income
+              </button>
+              <button onClick={() => { setActiveTab('add-expense'); setAmount(''); setCategory(''); }} className="hover-lift rounded-2xl bg-gray-900 py-3 text-xs font-bold text-white shadow-md">
+                − Expense
+              </button>
             </div>
 
-            {/* Recent Transactions */}
-            <div className="bg-[#202124] border border-[#5f6368] rounded-2xl p-4 shadow-sm space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] font-medium text-[#9aa0a6] uppercase tracking-wider">Recent Notes</span>
-                <button onClick={() => setActiveTab('history')} className="text-xs text-[#8ab4f8] hover:underline">View all</button>
+            {/* Recent — horizontal scroll */}
+            <div className="animate-fade-up stagger-4">
+              <div className="mb-2 flex items-center justify-between px-1">
+                <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Recent</span>
+                <button onClick={() => setActiveTab('history')} className="text-xs font-medium text-green-600 hover:underline">See all</button>
               </div>
-
-              <div className="space-y-2">
-                {transactions.length === 0 ? (
-                  <p className="text-xs text-[#9aa0a6] text-center py-4">No notes or transactions yet.</p>
-                ) : (
-                  transactions.slice(0, 4).map(t => (
-                    <div key={t.id} className="group bg-[#303134] border border-transparent hover:border-[#5f6368] p-3 rounded-xl flex justify-between items-center transition-all">
-                      <div className="flex items-center gap-2.5">
-                        <div className={`w-2 h-2 rounded-full ${t.type === 'income' ? 'bg-[#81c995]' : 'bg-[#f28b82]'}`} />
-                        <div>
-                          <p className="text-xs font-medium text-[#e8eaed]">{t.category}</p>
-                          <span className="text-[10px] text-[#9aa0a6]">{t.date}</span>
-                        </div>
+              {transactions.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-green-300 bg-green-50/50 py-8 text-center text-xs text-gray-500">
+                  No transactions yet — add your first one!
+                </div>
+              ) : (
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                  {transactions.slice(0, 6).map((t, i) => (
+                    <div
+                      key={t.id}
+                      className="hover-lift shrink-0 w-36 animate-fade-up rounded-2xl border border-green-200 bg-white p-3 shadow-sm"
+                      style={{ animationDelay: `${i * 0.07}s` }}
+                    >
+                      <div className={`mb-2 inline-block rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${t.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                        {t.type}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-medium ${t.type === 'income' ? 'text-[#81c995]' : 'text-[#f28b82]'}`}>
-                          {t.type === 'income' ? '+' : '-'}৳{t.amount.toLocaleString()}
-                        </span>
-                        <button onClick={() => { setSelectedTransaction(t.id); setShowDeleteModal(true); }} className="opacity-0 group-hover:opacity-100 p-1 text-[#9aa0a6] hover:text-[#f28b82] transition-opacity">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+                      <p className="truncate text-xs font-semibold text-gray-900">{t.category}</p>
+                      <p className={`mt-1 text-sm font-bold ${t.type === 'income' ? 'text-green-600' : 'text-gray-900'}`}>
+                        {t.type === 'income' ? '+' : '−'}৳{t.amount.toLocaleString()}
+                      </p>
+                      <p className="mt-1 text-[9px] text-gray-400">{t.date}</p>
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
           </div>
@@ -924,35 +892,38 @@ export default function TrackerApp() {
 
         {/* EXPENSE HUB */}
         {activeTab === 'expense-hub' && (
-          <div className="space-y-3 animate-in fade-in duration-200">
-            <button onClick={() => setActiveTab('home')} className="text-xs text-[#8ab4f8] font-medium mb-1">
-              ← Back
-            </button>
-            <h2 className="text-lg font-medium text-[#e8eaed] mb-3">Choose Action</h2>
+          <div className="animate-tab-enter space-y-4">
+            <SectionHeader title="What are you logging?" subtitle="Pick a flow to get started" onBack={() => setActiveTab('home')} />
 
-            <div className="grid grid-cols-1 gap-3">
-              <button 
+            <div className="grid grid-cols-1 gap-4">
+              <button
                 onClick={() => setActiveTab('add-money')}
-                className="bg-[#202124] border border-[#5f6368] hover:border-[#81c995] p-5 rounded-2xl flex items-center justify-between text-left transition-all"
+                className="hover-lift group relative overflow-hidden rounded-3xl border-2 border-green-300 bg-gradient-to-br from-green-50 to-white p-6 text-left shadow-md"
               >
-                <div>
-                  <span className="text-[10px] text-[#81c995] uppercase font-medium tracking-wider">Flow A</span>
-                  <h3 className="text-base font-medium text-[#e8eaed] mt-0.5">Add Money</h3>
-                  <p className="text-xs text-[#9aa0a6] mt-1">Record salary, parent support, or stipends</p>
+                <div className="absolute right-4 top-4 opacity-10 transition group-hover:scale-125 group-hover:opacity-20">
+                  <ArrowDownLeft size={80} className="text-green-600" />
                 </div>
-                <ArrowDownLeft size={22} className="text-[#81c995]" />
+                <span className="rounded-full bg-green-500 px-2 py-0.5 text-[10px] font-bold uppercase text-white">Income</span>
+                <h3 className="mt-3 text-2xl font-bold text-gray-900">Add Money</h3>
+                <p className="mt-1 text-sm text-gray-500">Salary, stipend, family support</p>
+                <div className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-green-600">
+                  Continue <ChevronRight size={16} className="transition group-hover:translate-x-1" />
+                </div>
               </button>
 
-              <button 
+              <button
                 onClick={() => setActiveTab('add-expense')}
-                className="bg-[#202124] border border-[#5f6368] hover:border-[#f28b82] p-5 rounded-2xl flex items-center justify-between text-left transition-all"
+                className="hover-lift group relative overflow-hidden rounded-3xl border-2 border-gray-300 bg-gradient-to-br from-gray-50 to-white p-6 text-left shadow-md"
               >
-                <div>
-                  <span className="text-[10px] text-[#f28b82] uppercase font-medium tracking-wider">Flow B</span>
-                  <h3 className="text-base font-medium text-[#e8eaed] mt-0.5">Add Expense</h3>
-                  <p className="text-xs text-[#9aa0a6] mt-1">Log khichuri, transport, utilities, or snacks</p>
+                <div className="absolute right-4 top-4 opacity-10 transition group-hover:scale-125 group-hover:opacity-20">
+                  <ArrowUpRight size={80} className="text-gray-900" />
                 </div>
-                <ArrowUpRight size={22} className="text-[#f28b82]" />
+                <span className="rounded-full bg-gray-900 px-2 py-0.5 text-[10px] font-bold uppercase text-white">Expense</span>
+                <h3 className="mt-3 text-2xl font-bold text-gray-900">Add Expense</h3>
+                <p className="mt-1 text-sm text-gray-500">Food, transport, utilities & more</p>
+                <div className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
+                  Continue <ChevronRight size={16} className="transition group-hover:translate-x-1" />
+                </div>
               </button>
             </div>
           </div>
@@ -960,27 +931,23 @@ export default function TrackerApp() {
 
         {/* ADD MONEY */}
         {activeTab === 'add-money' && (
-          <div className="bg-[#202124] border border-[#5f6368] rounded-2xl p-5 space-y-4 shadow-sm animate-in fade-in duration-200">
-            <div className="flex justify-between items-center">
-              <h2 className="text-base font-medium text-[#e8eaed]">Add Income</h2>
-              <button onClick={() => setActiveTab('expense-hub')} className="text-xs text-[#8ab4f8]">Cancel</button>
-            </div>
-
+          <div className="animate-slide-in rounded-3xl border border-green-200 bg-white p-6 shadow-lg">
+            <SectionHeader title="Add Income" subtitle="Money coming in" onBack={() => setActiveTab('expense-hub')} />
             <form onSubmit={(e) => handleSubmitTransaction(e, 'income')} className="space-y-4">
               <div className="relative">
-                <label className="block text-xs font-medium text-[#9aa0a6] mb-1">Category</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
                 <input 
                   type="text"
                   placeholder="e.g. Mom, Salary, Tuition"
                   value={category}
                   onChange={(e) => handleCategoryChange(e.target.value, 'income')}
-                  className="w-full bg-[#303134] border border-[#5f6368] focus:border-[#8ab4f8] p-3 rounded-xl text-sm text-[#e8eaed] focus:outline-none"
+                  className="w-full bg-green-50 border border-green-200 focus:border-green-500 p-3 rounded-xl text-sm text-gray-900 focus:outline-none"
                   required
                 />
                 {filteredSuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-[#303134] border border-[#5f6368] rounded-xl shadow-lg overflow-hidden">
+                  <div className="absolute z-10 w-full mt-1 bg-green-50 border border-green-200 rounded-xl shadow-lg overflow-hidden">
                     {filteredSuggestions.map((s, idx) => (
-                      <div key={idx} onClick={() => { setCategory(s); setFilteredSuggestions([]); }} className="p-2.5 text-xs text-[#e8eaed] hover:bg-[#3c4043] cursor-pointer border-b border-[#202124] last:border-none">
+                      <div key={idx} onClick={() => { setCategory(s); setFilteredSuggestions([]); }} className="p-2.5 text-xs text-gray-900 hover:bg-green-100 cursor-pointer border-b border-green-100 last:border-none">
                         {s}
                       </div>
                     ))}
@@ -989,20 +956,20 @@ export default function TrackerApp() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#9aa0a6] mb-1">Amount (৳)</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Amount (৳)</label>
                 <input 
                   type="number"
                   step="any"
                   placeholder="0.00"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-full bg-[#303134] border border-[#5f6368] focus:border-[#81c995] p-3 rounded-xl font-medium text-base text-[#81c995] focus:outline-none"
+                  className="w-full bg-green-50 border border-green-200 focus:border-green-500 p-3 rounded-xl font-medium text-base text-green-600 focus:outline-none"
                   required
                 />
               </div>
 
-              <button type="submit" className="w-full bg-[#8ab4f8] hover:bg-[#aecbfa] text-[#202124] font-medium py-3 rounded-xl transition-colors text-sm">
-                Save Income
+              <button type="submit" className="hover-lift w-full rounded-2xl bg-green-500 py-3.5 text-sm font-bold text-white shadow-lg shadow-green-500/30 transition hover:bg-green-600">
+                Save Income ✓
               </button>
             </form>
           </div>
@@ -1010,27 +977,23 @@ export default function TrackerApp() {
 
         {/* ADD EXPENSE */}
         {activeTab === 'add-expense' && (
-          <div className="bg-[#202124] border border-[#5f6368] rounded-2xl p-5 space-y-4 shadow-sm animate-in fade-in duration-200">
-            <div className="flex justify-between items-center">
-              <h2 className="text-base font-medium text-[#e8eaed]">Add Expense</h2>
-              <button onClick={() => setActiveTab('expense-hub')} className="text-xs text-[#8ab4f8]">Cancel</button>
-            </div>
-
+          <div className="animate-slide-in rounded-3xl border border-green-200 bg-white p-6 shadow-lg">
+            <SectionHeader title="Add Expense" subtitle="Money going out" onBack={() => setActiveTab('expense-hub')} />
             <form onSubmit={(e) => handleSubmitTransaction(e, 'expense')} className="space-y-4">
               <div className="relative">
-                <label className="block text-xs font-medium text-[#9aa0a6] mb-1">Category Name</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Category Name</label>
                 <input 
                   type="text"
                   placeholder="e.g. Khichuri, Cigarettes, Transport"
                   value={category}
                   onChange={(e) => handleCategoryChange(e.target.value, 'expense')}
-                  className="w-full bg-[#303134] border border-[#5f6368] focus:border-[#f28b82] p-3 rounded-xl text-sm text-[#e8eaed] focus:outline-none"
+                  className="w-full bg-green-50 border border-green-200 focus:border-gray-400 p-3 rounded-xl text-sm text-gray-900 focus:outline-none"
                   required
                 />
                 {filteredSuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-[#303134] border border-[#5f6368] rounded-xl shadow-lg overflow-hidden">
+                  <div className="absolute z-10 w-full mt-1 bg-green-50 border border-green-200 rounded-xl shadow-lg overflow-hidden">
                     {filteredSuggestions.map((s, idx) => (
-                      <div key={idx} onClick={() => { setCategory(s); setFilteredSuggestions([]); }} className="p-2.5 text-xs text-[#e8eaed] hover:bg-[#3c4043] cursor-pointer border-b border-[#202124] last:border-none">
+                      <div key={idx} onClick={() => { setCategory(s); setFilteredSuggestions([]); }} className="p-2.5 text-xs text-gray-900 hover:bg-green-100 cursor-pointer border-b border-green-100 last:border-none">
                         {s}
                       </div>
                     ))}
@@ -1039,20 +1002,20 @@ export default function TrackerApp() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#9aa0a6] mb-1">Amount Spent (৳)</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Amount Spent (৳)</label>
                 <input 
                   type="number"
                   step="any"
                   placeholder="0.00"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-full bg-[#303134] border border-[#5f6368] focus:border-[#f28b82] p-3 rounded-xl font-medium text-base text-[#f28b82] focus:outline-none"
+                  className="w-full bg-green-50 border border-green-200 focus:border-gray-400 p-3 rounded-xl font-medium text-base text-gray-900 focus:outline-none"
                   required
                 />
               </div>
 
-              <button type="submit" className="w-full bg-[#f28b82] hover:bg-[#f6aea9] text-[#202124] font-medium py-3 rounded-xl transition-colors text-sm">
-                Save Expense
+              <button type="submit" className="hover-lift w-full rounded-2xl bg-gray-900 py-3.5 text-sm font-bold text-white shadow-lg transition hover:bg-gray-800">
+                Save Expense ✓
               </button>
             </form>
           </div>
@@ -1060,250 +1023,223 @@ export default function TrackerApp() {
 
         {/* LEDGER HISTORY */}
         {activeTab === 'history' && (
-          <div className="space-y-3 animate-in fade-in duration-200">
-            <button onClick={() => setActiveTab('home')} className="text-xs text-[#8ab4f8] font-medium mb-1">
-              ← Back
-            </button>
-            <h2 className="text-lg font-medium text-[#e8eaed] mb-2">Month-wise Ledger</h2>
+          <div className="animate-tab-enter space-y-4">
+            <SectionHeader title="Transaction Timeline" subtitle={`${filteredTransactions.length} records`} onBack={() => setActiveTab('home')} />
 
-            <div className="relative mb-3">
-              <Search size={16} className="absolute left-3.5 top-3 text-[#9aa0a6]" />
+            <div className="relative">
+              <Search size={16} className="absolute left-4 top-3.5 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search notes & expenses..."
+                placeholder="Search category or amount..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#202124] border border-[#5f6368] pl-10 pr-4 py-2.5 rounded-xl text-xs text-[#e8eaed] focus:outline-none focus:border-[#8ab4f8]"
+                className="w-full rounded-2xl border border-green-200 bg-white py-3 pl-11 pr-4 text-sm shadow-sm transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
               />
             </div>
 
-            <div className="space-y-3">
-              {Object.keys(groupedTransactions).length === 0 ? (
-                <p className="text-center text-[#9aa0a6] py-10 text-xs">No records found.</p>
-              ) : (
-                Object.entries(groupedTransactions).map(([dateLabel, dayItems]) => {
+            {Object.keys(groupedTransactions).length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-green-300 py-12 text-center text-sm text-gray-500">
+                No records found
+              </div>
+            ) : (
+              <div className="relative space-y-0 pl-4">
+                <div className="timeline-line absolute bottom-4 left-[7px] top-4 w-0.5 rounded-full" />
+                {Object.entries(groupedTransactions).map(([dateLabel, dayItems], groupIdx) => {
                   const dayTotal = dayItems.reduce((sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount), 0);
                   return (
-                    <div key={dateLabel} className="bg-[#202124] border border-[#5f6368] rounded-2xl p-3.5 shadow-sm space-y-2">
-                      <div className="flex justify-between items-center border-b border-[#3c4043] pb-2">
-                        <span className="text-[11px] font-medium text-[#8ab4f8]">{dateLabel}</span>
-                        <span className={`text-[10px] font-medium ${dayTotal >= 0 ? 'text-[#81c995]' : 'text-[#f28b82]'}`}>
-                          Net: ৳{dayTotal.toLocaleString()}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        {dayItems.map((item) => (
-                          <div key={item.id} className="group bg-[#303134] p-2.5 rounded-xl flex justify-between items-center">
-                            <div>
-                              <p className="text-xs font-medium text-[#e8eaed]">{item.category}</p>
-                              <span className="text-[9px] text-[#9aa0a6]">{item.date}</span>
+                    <div key={dateLabel} className="animate-fade-up relative pb-6" style={{ animationDelay: `${groupIdx * 0.08}s` }}>
+                      <div className="timeline-dot absolute -left-4 top-1 h-3.5 w-3.5 rounded-full bg-green-500" />
+                      <div className="ml-4">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-xs font-bold text-green-600">{dateLabel}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${dayTotal >= 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-800'}`}>
+                            Net ৳{dayTotal.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {dayItems.map((item, i) => (
+                            <div
+                              key={item.id}
+                              className="hover-lift group flex items-center justify-between rounded-2xl border border-green-100 bg-white p-3 shadow-sm"
+                              style={{ animationDelay: `${groupIdx * 0.08 + i * 0.04}s` }}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs font-bold ${item.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-800'}`}>
+                                  {item.type === 'income' ? '↑' : '↓'}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-900">{item.category}</p>
+                                  <p className="text-[10px] text-gray-400">{item.date}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-sm font-bold ${item.type === 'income' ? 'text-green-600' : 'text-gray-900'}`}>
+                                  {item.type === 'income' ? '+' : '−'}৳{item.amount.toLocaleString()}
+                                </span>
+                                <button onClick={() => { setSelectedTransaction(item.id); setShowDeleteModal(true); }} className="rounded-lg p-1 text-gray-400 opacity-0 transition group-hover:opacity-100 hover:text-gray-900">
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className={`text-xs font-medium ${item.type === 'income' ? 'text-[#81c995]' : 'text-[#f28b82]'}`}>
-                                {item.type === 'income' ? '+' : '-'}৳{item.amount.toLocaleString()}
-                              </span>
-                              <button onClick={() => { setSelectedTransaction(item.id); setShowDeleteModal(true); }} className="opacity-0 group-hover:opacity-100 text-[#9aa0a6] hover:text-[#f28b82]">
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
                     </div>
                   );
-                })
-              )}
-            </div>
+                })}
+              </div>
+            )}
           </div>
         )}
 
         {/* TUITION CALENDAR */}
         {activeTab === 'tuition' && (
-          <div className="space-y-3 animate-in fade-in duration-200">
-            <button onClick={() => setActiveTab('home')} className="text-xs text-[#8ab4f8] font-medium mb-1">
-              ← Back
-            </button>
+          <div className="animate-tab-enter space-y-4">
+            <SectionHeader title="Tuition Tracker" subtitle="Sessions & transport fares" onBack={() => setActiveTab('home')} />
 
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {tuitionProfiles.map((profile) => (
+              {tuitionProfiles.map((profile, i) => (
                 <button
                   key={profile.id}
                   onClick={() => setSelectedTuitionId(profile.id)}
-                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  className={`shrink-0 animate-fade-up rounded-full px-4 py-2 text-xs font-bold transition-all ${
                     selectedTuitionId === profile.id
-                      ? 'bg-[#81c995]/20 border border-[#81c995] text-[#81c995]'
-                      : 'bg-[#303134] border border-[#5f6368] text-[#9aa0a6] hover:border-[#81c995]/50'
+                      ? 'scale-105 bg-green-500 text-white shadow-lg shadow-green-500/30'
+                      : 'border border-green-200 bg-white text-gray-500 hover:border-green-400'
                   }`}
+                  style={{ animationDelay: `${i * 0.05}s` }}
                 >
                   {profile.name}
                 </button>
               ))}
               <button
                 onClick={() => setShowAddTuitionModal(true)}
-                className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium bg-[#303134] border border-[#5f6368] text-[#8ab4f8] hover:border-[#8ab4f8] flex items-center gap-1"
+                className="hover-lift flex shrink-0 items-center gap-1 rounded-full border border-dashed border-green-400 bg-green-50 px-4 py-2 text-xs font-bold text-green-600"
               >
-                <Plus size={14} />
-                Add Tuition
+                <Plus size={14} /> Add
               </button>
             </div>
 
             {!activeTuition ? (
-              <div className="bg-[#202124] border border-[#5f6368] rounded-2xl p-6 text-center space-y-3">
-                <p className="text-sm text-[#9aa0a6]">No tuition added yet. Create one to start tracking sessions.</p>
-                <button
-                  onClick={() => setShowAddTuitionModal(true)}
-                  className="px-4 py-2 bg-[#8ab4f8] hover:bg-[#aecbfa] text-[#202124] rounded-xl text-xs font-medium transition-colors"
-                >
+              <div className="animate-scale-in rounded-3xl border border-dashed border-green-300 bg-green-50/50 p-10 text-center">
+                <BookOpen size={40} className="mx-auto mb-3 text-green-400 animate-float-gentle" />
+                <p className="text-sm text-gray-500">No tuition yet — create one to start tracking</p>
+                <button onClick={() => setShowAddTuitionModal(true)} className="hover-lift mt-4 rounded-2xl bg-green-500 px-6 py-2.5 text-xs font-bold text-white shadow-lg shadow-green-500/30">
                   Add Your First Tuition
                 </button>
               </div>
             ) : (
               <>
-            <div className="bg-[#202124] border border-[#5f6368] rounded-2xl p-4 shadow-sm space-y-3">
-              <div className="flex justify-between items-center gap-2">
-                <h2 className="text-base font-medium text-[#e8eaed]">{activeTuition.name}</h2>
-                <div className="flex items-center gap-1.5 bg-[#81c995]/10 text-[#81c995] px-2 py-0.5 rounded-md">
-                  <span className="text-[10px]">Goal:</span>
-                  <input
-                    type="number"
-                    min="1"
-                    defaultValue={activeTuition.targetDays || 1}
-                    key={`target-${activeTuition.id}-${activeTuition.targetDays}`}
-                    onBlur={(e) => handleUpdateTuitionProfile('targetDays', e.target.value)}
-                    className="w-10 bg-transparent text-[10px] font-medium text-[#81c995] focus:outline-none text-center"
-                  />
-                  <span className="text-[10px]">Days</span>
+                {/* Progress ring card */}
+                <div className="animate-scale-in flex items-center gap-5 rounded-3xl border border-green-200 bg-white p-5 shadow-sm">
+                  {(() => {
+                    const pct = targetSessions > 0 ? Math.min(sessionsDone / targetSessions, 1) : 0;
+                    const r = 44;
+                    const circ = 2 * Math.PI * r;
+                    const offset = circ * (1 - pct);
+                    return (
+                      <div className="relative shrink-0">
+                        <svg width="100" height="100" className="-rotate-90">
+                          <circle cx="50" cy="50" r={r} fill="none" stroke="#dcfce7" strokeWidth="8" />
+                          <circle
+                            cx="50" cy="50" r={r} fill="none" stroke="#22c55e" strokeWidth="8"
+                            strokeLinecap="round"
+                            strokeDasharray={circ}
+                            strokeDashoffset={offset}
+                            className="progress-ring"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="text-xl font-bold text-gray-900">{sessionsDone}</span>
+                          <span className="text-[9px] text-gray-500">/ {targetSessions}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-gray-900">{activeTuition.name}</h3>
+                    <p className="text-xs text-gray-500">{sessionsLeft} days remaining this month</p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className="text-[10px] font-medium text-gray-500">Goal:</span>
+                      <input
+                        type="number" min="1"
+                        defaultValue={activeTuition.targetDays || 1}
+                        key={`target-${activeTuition.id}-${activeTuition.targetDays}`}
+                        onBlur={(e) => handleUpdateTuitionProfile('targetDays', e.target.value)}
+                        className="w-12 rounded-lg border border-green-200 bg-green-50 px-2 py-1 text-center text-xs font-bold text-green-600 focus:outline-none"
+                      />
+                      <span className="text-[10px] text-gray-500">days/mo</span>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-[10px] font-medium text-gray-500">Fare:</span>
+                      <span className="text-[10px] text-gray-400">৳</span>
+                      <input
+                        type="number" min="0" step="any"
+                        defaultValue={activeTuition.defaultFare ?? 0}
+                        key={`fare-${activeTuition.id}-${activeTuition.defaultFare}`}
+                        onBlur={(e) => handleUpdateTuitionProfile('defaultFare', e.target.value)}
+                        className="w-16 rounded-lg border border-green-200 bg-green-50 px-2 py-1 text-xs font-bold text-green-600 focus:outline-none"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-[#303134] p-3 rounded-xl text-center">
-                  <span className="text-2xl font-normal text-[#81c995]">{sessionsDone}</span>
-                  <span className="text-[9px] text-[#9aa0a6] block uppercase mt-0.5">Completed</span>
-                </div>
-                <div className="bg-[#303134] p-3 rounded-xl text-center">
-                  <span className="text-2xl font-normal text-[#8ab4f8]">{sessionsLeft}</span>
-                  <span className="text-[9px] text-[#9aa0a6] block uppercase mt-0.5">Remaining</span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between bg-[#303134] p-2.5 rounded-xl">
-                <span className="text-xs text-[#9aa0a6]">Transport Fare / Trip</span>
-                <div className="flex items-center gap-1 bg-[#202124] border border-[#5f6368] px-2.5 py-1 rounded-lg">
-                  <span className="text-xs text-[#9aa0a6]">৳</span>
-                  <input 
-                    type="number"
-                    min="0"
-                    step="any"
-                    defaultValue={activeTuition.defaultFare ?? 0}
-                    key={`fare-${activeTuition.id}-${activeTuition.defaultFare}`}
-                    onBlur={(e) => handleUpdateTuitionProfile('defaultFare', e.target.value)}
-                    className="w-12 bg-transparent text-xs font-medium text-[#81c995] focus:outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-[#202124] border border-[#5f6368] rounded-2xl p-4 shadow-sm space-y-3">
-              <div className="flex justify-between items-center">
-                <button onClick={() => setCalendarDate(new Date(year, month - 1, 1))} className="p-1.5 hover:bg-[#3c4043] rounded-full text-[#9aa0a6]">
-                  <ChevronLeft size={16} />
-                </button>
-                <h3 className="font-medium text-sm text-[#e8eaed]">
-                  {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                </h3>
-                <button onClick={() => setCalendarDate(new Date(year, month + 1, 1))} className="p-1.5 hover:bg-[#3c4043] rounded-full text-[#9aa0a6]">
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-7 gap-1 text-center">
-                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-                  <span key={day} className="text-[10px] text-[#9aa0a6] font-medium">{day}</span>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-7 gap-1.5">
-                {Array.from({ length: firstDayIndex }).map((_, i) => (
-                  <div key={`empty-${i}`} />
-                ))}
-
-                {Array.from({ length: daysInMonth }).map((_, i) => {
-                  const dayNum = i + 1;
-                  const targetDate = new Date(year, month, dayNum);
-                  const dateStr = getDateKey(targetDate);
-                  const isLogged = activeProfileSessions.some(s => getDateKey(s.date) === dateStr);
-                  const isToday = dateStr === getDateKey(new Date());
-
-                  return (
-                    <button
-                      key={dayNum}
-                      onClick={() => handleDayClick(targetDate)}
-                      className={`h-9 rounded-xl font-medium text-xs flex flex-col items-center justify-center transition-all ${
-                        isLogged 
-                          ? 'bg-[#81c995]/20 border border-[#81c995] text-[#81c995]' 
-                          : isToday 
-                            ? 'bg-[#8ab4f8]/20 border border-[#8ab4f8] text-[#8ab4f8]' 
-                            : 'bg-[#303134] border border-transparent text-[#e8eaed] hover:border-[#5f6368]'
-                      }`}
-                    >
-                      <span>{dayNum}</span>
+                {/* Calendar */}
+                <div className="animate-fade-up stagger-2 rounded-3xl border border-green-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4 flex items-center justify-between">
+                    <button onClick={() => setCalendarDate(new Date(year, month - 1, 1))} className="rounded-xl p-2 transition hover:scale-110 hover:bg-green-50">
+                      <ChevronLeft size={18} className="text-gray-500" />
                     </button>
-                  );
-                })}
-              </div>
-            </div>
+                    <h3 className="text-sm font-bold text-gray-900">
+                      {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </h3>
+                    <button onClick={() => setCalendarDate(new Date(year, month + 1, 1))} className="rounded-xl p-2 transition hover:scale-110 hover:bg-green-50">
+                      <ChevronRight size={18} className="text-gray-500" />
+                    </button>
+                  </div>
+                  <div className="mb-2 grid grid-cols-7 gap-1 text-center">
+                    {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                      <span key={day} className="text-[10px] font-bold text-gray-400">{day}</span>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-1.5">
+                    {Array.from({ length: firstDayIndex }).map((_, i) => <div key={`empty-${i}`} />)}
+                    {Array.from({ length: daysInMonth }).map((_, i) => {
+                      const dayNum = i + 1;
+                      const targetDate = new Date(year, month, dayNum);
+                      const dateStr = getDateKey(targetDate);
+                      const isLogged = activeProfileSessions.some(s => getDateKey(s.date) === dateStr);
+                      const isToday = dateStr === getDateKey(new Date());
+                      return (
+                        <button
+                          key={dayNum}
+                          onClick={() => handleDayClick(targetDate)}
+                          className={`cal-day flex h-10 flex-col items-center justify-center rounded-xl text-xs font-bold ${
+                            isLogged
+                              ? 'bg-green-500 text-white shadow-md shadow-green-500/40'
+                              : isToday
+                                ? 'border-2 border-green-500 bg-green-50 text-green-700'
+                                : 'bg-green-50/50 text-gray-700 hover:bg-green-100'
+                          }`}
+                        >
+                          {dayNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </>
             )}
-
           </div>
         )}
 
       </main>
 
-      {/* --- BOTTOM NAVIGATION --- */}
-      <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-[#202124] border-t border-[#5f6368]/40 flex justify-around items-center py-2 z-50">
-        <button 
-          onClick={() => setActiveTab('home')}
-          className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'home' ? 'text-[#8ab4f8]' : 'text-[#9aa0a6]'}`}
-        >
-          <Home size={20} className="mb-0.5" />
-          <span className="text-[10px]">Home</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab('expense-hub')}
-          className={`flex flex-col items-center p-2 transition-colors ${['expense-hub', 'add-money', 'add-expense'].includes(activeTab) ? 'text-[#8ab4f8]' : 'text-[#9aa0a6]'}`}
-        >
-          <PlusCircle size={20} className="mb-0.5" />
-          <span className="text-[10px]">Add</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab('history')}
-          className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'history' ? 'text-[#8ab4f8]' : 'text-[#9aa0a6]'}`}
-        >
-          <Clock size={20} className="mb-0.5" />
-          <span className="text-[10px]">Ledger</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab('tuition')}
-          className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'tuition' ? 'text-[#8ab4f8]' : 'text-[#9aa0a6]'}`}
-        >
-          <BookOpen size={20} className="mb-0.5" />
-          <span className="text-[10px]">Tuition</span>
-        </button>
-
-        <button 
-          onClick={() => setShowBudgetModal(true)}
-          className={`flex flex-col items-center p-2 transition-colors text-[#9aa0a6] hover:text-[#8ab4f8]`}
-        >
-          <Settings size={20} className="mb-0.5" />
-          <span className="text-[10px]">Budget</span>
-        </button>
-      </nav>
+      <BottomNav
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onBudget={() => setShowBudgetModal(true)}
+      />
 
     </div>
   );

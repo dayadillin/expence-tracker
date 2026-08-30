@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, googleProvider } from "../firebase";
+import FlyingMoney from "./FlyingMoney";
+import { Wallet } from "lucide-react";
 
 export default function LoginModal() {
   const [email, setEmail] = useState("");
@@ -31,59 +33,73 @@ export default function LoginModal() {
   };
 
   return (
-    <div className="flex h-screen items-center justify-center bg-slate-950 text-white p-4">
-      <div className="w-full max-w-md p-6 bg-slate-900 rounded-xl shadow-lg border border-slate-800">
-        <h2 className="text-2xl font-bold text-center mb-6">
-          {isSignUp ? "Create an Account" : "Sign In to Expense Tracker"}
-        </h2>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-green-50 via-white to-green-100 p-4">
+      <FlyingMoney />
 
-        <button
-          onClick={handleGoogleSignIn}
-          className="w-full py-2 px-4 mb-4 bg-white text-black font-semibold rounded-lg hover:bg-slate-200 transition"
-        >
-          Continue with Google
-        </button>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(34,197,94,0.12),transparent_40%),radial-gradient(circle_at_80%_80%,rgba(34,197,94,0.08),transparent_35%)]" />
 
-        <div className="flex items-center my-4">
-          <div className="flex-1 border-t border-slate-700"></div>
-          <span className="px-3 text-sm text-slate-400">OR</span>
-          <div className="flex-1 border-t border-slate-700"></div>
+      <div className="relative z-10 w-full max-w-md animate-scale-in">
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-green-500 text-white shadow-lg shadow-green-500/25">
+            <Wallet size={28} />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">KeepNotes & Finance</h1>
+          <p className="mt-1 text-sm text-gray-500">Track income, expenses & tuition in one place</p>
         </div>
 
-        <form onSubmit={handleEmailAuth} className="space-y-4">
-          <input
-            type="email"
-            placeholder="Email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full p-2 bg-slate-800 border border-slate-700 rounded text-white"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="w-full p-2 bg-slate-800 border border-slate-700 rounded text-white"
-          />
-          <button
-            type="submit"
-            className="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded font-semibold transition"
-          >
-            {isSignUp ? "Sign Up" : "Log In"}
-          </button>
-        </form>
+        <div className="rounded-2xl border border-green-200 bg-white/95 p-6 shadow-2xl shadow-green-900/10 backdrop-blur-md">
+          <h2 className="mb-6 text-center text-lg font-semibold text-gray-900">
+            {isSignUp ? "Create an Account" : "Welcome Back"}
+          </h2>
 
-        <p className="text-sm text-center text-slate-400 mt-4">
-          {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
           <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-blue-400 underline"
+            onClick={handleGoogleSignIn}
+            className="mb-4 w-full rounded-xl border border-gray-200 bg-white py-2.5 px-4 font-medium text-gray-900 shadow-sm transition hover:border-green-300 hover:bg-green-50"
           >
-            {isSignUp ? "Log In" : "Sign Up"}
+            Continue with Google
           </button>
-        </p>
+
+          <div className="my-4 flex items-center">
+            <div className="flex-1 border-t border-green-200" />
+            <span className="px-3 text-xs font-medium uppercase tracking-wider text-gray-400">or</span>
+            <div className="flex-1 border-t border-green-200" />
+          </div>
+
+          <form onSubmit={handleEmailAuth} className="space-y-3">
+            <input
+              type="email"
+              placeholder="Email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full rounded-xl border border-green-200 bg-green-50/50 px-3 py-2.5 text-gray-900 placeholder:text-gray-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full rounded-xl border border-green-200 bg-green-50/50 px-3 py-2.5 text-gray-900 placeholder:text-gray-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+            />
+            <button
+              type="submit"
+              className="w-full rounded-xl bg-green-500 py-2.5 font-semibold text-white shadow-md shadow-green-500/30 transition hover:bg-green-600"
+            >
+              {isSignUp ? "Sign Up" : "Log In"}
+            </button>
+          </form>
+
+          <p className="mt-4 text-center text-sm text-gray-500">
+            {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+            <button
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="font-medium text-green-600 hover:text-green-700"
+            >
+              {isSignUp ? "Log In" : "Sign Up"}
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );

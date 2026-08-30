@@ -28,24 +28,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-        if (userDoc.exists() && userDoc.data().nickname) {
-          setNickname(userDoc.data().nickname);
+      try {
+        if (currentUser) {
+          setUser(currentUser);
+          try {
+            const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+            if (userDoc.exists() && userDoc.data().nickname) {
+              setNickname(userDoc.data().nickname);
+            } else {
+              setNickname(null);
+            }
+          } catch (error) {
+            console.error("Error fetching user profile:", error);
+            setNickname(null);
+          }
         } else {
+          setUser(null);
           setNickname(null);
         }
-      } else {
+      } catch (error) {
+        console.error("Error in auth state change:", error);
+        setUser(null);
         setNickname(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  const logout = () => signOut(auth);
+  const logout = async () => {
+    try {
+      setNickname(null);
+      await signOut(auth);
+    } catch (error) {
+      console.error("Error signing out:", error);
+      throw error;
+    }
+  };
 
   return (
     <AuthContext.Provider value={{ user, nickname, loading, setNickname, logout }}>

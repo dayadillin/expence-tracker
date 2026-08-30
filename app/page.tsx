@@ -6,7 +6,7 @@ import {
   Calendar as CalendarIcon, Clock, CheckCircle2, 
   ChevronLeft, ChevronRight, Search, X, Trash2, 
   Wallet, Target, Download, Sparkles, TrendingUp, TrendingDown,
-  PieChart, BarChart3, AlertCircle, RefreshCw, Settings, LogOut
+  PieChart, BarChart3, AlertCircle, RefreshCw, Settings, LogOut, Plus
 } from 'lucide-react';
 import { db } from '../firebase';
 import { 
@@ -144,6 +144,66 @@ function BudgetModal({ isOpen, onClose, categories, budgets, onSave }) {
   );
 }
 
+function AddTuitionModal({ isOpen, onClose, onConfirm }) {
+  const [name, setName] = useState('');
+  const [targetDays, setTargetDays] = useState('8');
+  const [defaultFare, setDefaultFare] = useState('100');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onConfirm(name, targetDays, defaultFare);
+    setName('');
+    setTargetDays('8');
+    setDefaultFare('100');
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Add Tuition">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-xs font-medium text-[#9aa0a6] mb-1">Tuition Name</label>
+          <input
+            type="text"
+            placeholder="e.g. Math, Physics, Student A"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full bg-[#303134] border border-[#5f6368] focus:border-[#8ab4f8] p-3 rounded-xl text-sm text-[#e8eaed] focus:outline-none"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-[#9aa0a6] mb-1">Monthly Day Goal</label>
+          <input
+            type="number"
+            min="1"
+            value={targetDays}
+            onChange={(e) => setTargetDays(e.target.value)}
+            className="w-full bg-[#303134] border border-[#5f6368] focus:border-[#81c995] p-3 rounded-xl text-sm text-[#e8eaed] focus:outline-none"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-[#9aa0a6] mb-1">Transport Fare / Trip (৳)</label>
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={defaultFare}
+            onChange={(e) => setDefaultFare(e.target.value)}
+            className="w-full bg-[#303134] border border-[#5f6368] focus:border-[#81c995] p-3 rounded-xl text-sm text-[#e8eaed] focus:outline-none"
+            required
+          />
+        </div>
+        <button type="submit" className="w-full bg-[#8ab4f8] hover:bg-[#aecbfa] text-[#202124] font-medium py-2.5 rounded-xl transition-colors text-sm">
+          Add Tuition
+        </button>
+      </form>
+    </Modal>
+  );
+}
+
 // --- MAIN COMPONENT ---
 export default function TrackerApp() {
   const { user, nickname, loading: authLoading, logout } = useAuth();
@@ -152,6 +212,8 @@ export default function TrackerApp() {
   const [activeTab, setActiveTab] = useState('home');
   const [transactions, setTransactions] = useState([]);
   const [tuitionSessions, setTuitionSessions] = useState([]);
+  const [tuitionProfiles, setTuitionProfiles] = useState([]);
+  const [selectedTuitionId, setSelectedTuitionId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -161,13 +223,13 @@ export default function TrackerApp() {
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
-  const [defaultFare, setDefaultFare] = useState('100');
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [budgetLimits, setBudgetLimits] = useState({});
 
   const [showFareModal, setShowFareModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [showAddTuitionModal, setShowAddTuitionModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
@@ -180,6 +242,8 @@ export default function TrackerApp() {
   const clearUserData = useCallback(() => {
     setTransactions([]);
     setTuitionSessions([]);
+    setTuitionProfiles([]);
+    setSelectedTuitionId(null);
     setIncomeCategories(SMART_AI_INCOMES);
     setExpenseCategories(SMART_AI_EXPENSES);
     setAmount('');
@@ -192,6 +256,7 @@ export default function TrackerApp() {
     setShowFareModal(false);
     setShowDeleteModal(false);
     setShowBudgetModal(false);
+    setShowAddTuitionModal(false);
     setShowAnalytics(false);
     setShowSettings(false);
     setLoading(false);
@@ -236,6 +301,10 @@ export default function TrackerApp() {
       where('userId', '==', user.uid),
       orderBy('date', 'desc')
     );
+    const tuitionProfilesQuery = query(
+      collection(db, 'tuitionProfiles'),
+      where('userId', '==', user.uid)
+    );
 
     const unsubscribeTx = onSnapshot(
       txQuery,
@@ -270,11 +339,55 @@ export default function TrackerApp() {
       }
     );
 
+    const unsubscribeTuitionProfiles = onSnapshot(
+      tuitionProfilesQuery,
+      (snapshot) => {
+        try {
+          const profiles = snapshot.docs
+            .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+            .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+          setTuitionProfiles(profiles);
+        } catch (error) {
+          console.error('Error processing tuition profiles snapshot:', error);
+        }
+      },
+      (error) => {
+        console.error('Error listening to tuition profiles:', error);
+      }
+    );
+
     return () => {
       unsubscribeTx();
       unsubscribeTuition();
+      unsubscribeTuitionProfiles();
     };
   }, [user, clearUserData, applyTransactions]);
+
+  useEffect(() => {
+    if (tuitionProfiles.length === 0) {
+      setSelectedTuitionId(null);
+      return;
+    }
+    if (!selectedTuitionId || !tuitionProfiles.some((p) => p.id === selectedTuitionId)) {
+      setSelectedTuitionId(tuitionProfiles[0].id);
+    }
+  }, [tuitionProfiles, selectedTuitionId]);
+
+  const activeTuition = tuitionProfiles.find((p) => p.id === selectedTuitionId) || null;
+
+  const getProfileSessions = useCallback((profileId) => {
+    if (!profileId) return [];
+    const firstProfileId = tuitionProfiles[0]?.id;
+    return tuitionSessions.filter((session) => {
+      if (session.tuitionProfileId === profileId) return true;
+      return !session.tuitionProfileId && profileId === firstProfileId;
+    });
+  }, [tuitionSessions, tuitionProfiles]);
+
+  const activeProfileSessions = useMemo(
+    () => getProfileSessions(selectedTuitionId),
+    [getProfileSessions, selectedTuitionId]
+  );
 
   const handleCategoryChange = (val, type) => {
     setCategory(val);
@@ -322,14 +435,51 @@ export default function TrackerApp() {
   };
 
   const handleDayClick = (dateObj) => {
+    if (!selectedTuitionId) return;
     setSelectedDate(dateObj);
     setShowFareModal(true);
   };
 
+  const handleAddTuition = async (name, targetDays, defaultFare) => {
+    if (!user) return;
+
+    try {
+      const profileRef = await addDoc(collection(db, 'tuitionProfiles'), {
+        name: name.trim(),
+        targetDays: Math.max(1, parseInt(targetDays, 10) || 1),
+        defaultFare: parseFloat(defaultFare) || 0,
+        userId: user.uid,
+        createdAt: new Date().toISOString(),
+      });
+      setSelectedTuitionId(profileRef.id);
+      setShowAddTuitionModal(false);
+    } catch (error) {
+      console.error('Error adding tuition profile:', error);
+    }
+  };
+
+  const handleUpdateTuitionProfile = async (field, value) => {
+    if (!user || !selectedTuitionId) return;
+
+    try {
+      const payload = {};
+      if (field === 'targetDays') {
+        payload.targetDays = Math.max(1, parseInt(value, 10) || 1);
+      } else if (field === 'defaultFare') {
+        payload.defaultFare = parseFloat(value) || 0;
+      } else if (field === 'name') {
+        payload.name = value.trim();
+      }
+      await updateDoc(doc(db, 'tuitionProfiles', selectedTuitionId), payload);
+    } catch (error) {
+      console.error('Error updating tuition profile:', error);
+    }
+  };
+
   const handleFareConfirm = async (fareAmount) => {
-    if (!user || !selectedDate) return;
+    if (!user || !selectedDate || !selectedTuitionId || !activeTuition) return;
     const dateKey = getDateKey(selectedDate);
-    const existingSession = tuitionSessions.find(s => getDateKey(s.date) === dateKey);
+    const existingSession = activeProfileSessions.find((s) => getDateKey(s.date) === dateKey);
 
     try {
       if (existingSession) {
@@ -342,16 +492,18 @@ export default function TrackerApp() {
           date: dateKey,
           createdAt: new Date().toISOString(),
           userId: user.uid,
+          tuitionProfileId: selectedTuitionId,
         });
 
         if (fareAmount > 0) {
           const transportRef = await addDoc(collection(db, 'transactions'), {
             amount: fareAmount,
             type: 'expense',
-            category: `Tuition Transport - ${selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+            category: `${activeTuition.name} Transport - ${selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
             date: dateKey,
             timestamp: new Date().toISOString(),
             tuitionSessionId: sessionRef.id,
+            tuitionProfileId: selectedTuitionId,
             userId: user.uid,
           });
 
@@ -398,8 +550,8 @@ export default function TrackerApp() {
   const todayExpense = todayTransactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
   const todayNet = todayIncome - todayExpense;
 
-  const calculateStreak = useCallback(() => {
-    const sortedDates = [...new Set(tuitionSessions.map(s => s.date))].sort();
+  const calculateStreak = useCallback((sessions) => {
+    const sortedDates = [...new Set(sessions.map((s) => s.date))].sort();
     if (sortedDates.length === 0) return { streak: 0, active: false };
 
     let streak = 0;
@@ -421,9 +573,11 @@ export default function TrackerApp() {
       currentCheck.setDate(currentCheck.getDate() - 1);
     }
     return { streak, active: hasToday || streak > 0 };
-  }, [tuitionSessions]);
+  }, []);
 
-  const streakInfo = calculateStreak();
+  const homeTuition = activeTuition || tuitionProfiles[0] || null;
+  const homeTuitionSessions = getProfileSessions(homeTuition?.id);
+  const streakInfo = calculateStreak(homeTuitionSessions);
 
   const filteredTransactions = useMemo(() => {
     let filtered = transactions;
@@ -447,14 +601,20 @@ export default function TrackerApp() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayIndex = new Date(year, month, 1).getDay();
 
-  const currentMonthSessions = tuitionSessions.filter(s => {
+  const currentMonthSessions = activeProfileSessions.filter((s) => {
     const d = new Date(s.date);
     return d.getMonth() === month && d.getFullYear() === year;
   });
 
   const sessionsDone = currentMonthSessions.length;
-  const targetSessions = 16;
+  const targetSessions = activeTuition?.targetDays || 0;
   const sessionsLeft = Math.max(0, targetSessions - sessionsDone);
+  const homeSessionsDone = homeTuitionSessions.filter((s) => {
+    const d = new Date(s.date);
+    const now = new Date();
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).length;
+  const homeTargetSessions = homeTuition?.targetDays || 0;
 
   // Budget tracking
   const getBudgetStatus = (category) => {
@@ -495,11 +655,12 @@ export default function TrackerApp() {
       
       {/* --- MODALS --- */}
       <FareModal
+        key={selectedTuitionId || 'no-tuition'}
         isOpen={showFareModal}
         onClose={() => { setShowFareModal(false); setSelectedDate(null); }}
         onConfirm={handleFareConfirm}
         date={selectedDate || new Date()}
-        defaultFare={defaultFare}
+        defaultFare={String(activeTuition?.defaultFare ?? 100)}
       />
 
       <DeleteConfirmModal
@@ -514,6 +675,12 @@ export default function TrackerApp() {
         categories={[...incomeCategories, ...expenseCategories].map(c => ({ name: c, type: expenseCategories.includes(c) ? 'expense' : 'income' }))}
         budgets={budgetLimits}
         onSave={setBudgetLimits}
+      />
+
+      <AddTuitionModal
+        isOpen={showAddTuitionModal}
+        onClose={() => setShowAddTuitionModal(false)}
+        onConfirm={handleAddTuition}
       />
 
       {showSettings && (
@@ -621,7 +788,9 @@ export default function TrackerApp() {
                   <span className="text-xl">🔥</span>
                   <span className="text-lg font-medium text-[#fadd6d]">{streakInfo.streak} Days</span>
                 </div>
-                <span className="text-[10px] text-[#9aa0a6]">Target: {sessionsDone}/16</span>
+                <span className="text-[10px] text-[#9aa0a6]">
+                  {homeTuition ? `Target: ${homeSessionsDone}/${homeTargetSessions}` : 'No tuition set'}
+                </span>
               </div>
             </div>
 
@@ -693,7 +862,7 @@ export default function TrackerApp() {
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-[#e8eaed]">Tuition Calendar</h3>
-                    <p className="text-[11px] text-[#9aa0a6]">16-day tracker & fare sync</p>
+                    <p className="text-[11px] text-[#9aa0a6]">Custom day goals & fare sync</p>
                   </div>
                 </div>
                 <ChevronRight size={18} className="text-[#9aa0a6]" />
@@ -956,10 +1125,56 @@ export default function TrackerApp() {
               ← Back
             </button>
 
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {tuitionProfiles.map((profile) => (
+                <button
+                  key={profile.id}
+                  onClick={() => setSelectedTuitionId(profile.id)}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    selectedTuitionId === profile.id
+                      ? 'bg-[#81c995]/20 border border-[#81c995] text-[#81c995]'
+                      : 'bg-[#303134] border border-[#5f6368] text-[#9aa0a6] hover:border-[#81c995]/50'
+                  }`}
+                >
+                  {profile.name}
+                </button>
+              ))}
+              <button
+                onClick={() => setShowAddTuitionModal(true)}
+                className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium bg-[#303134] border border-[#5f6368] text-[#8ab4f8] hover:border-[#8ab4f8] flex items-center gap-1"
+              >
+                <Plus size={14} />
+                Add Tuition
+              </button>
+            </div>
+
+            {!activeTuition ? (
+              <div className="bg-[#202124] border border-[#5f6368] rounded-2xl p-6 text-center space-y-3">
+                <p className="text-sm text-[#9aa0a6]">No tuition added yet. Create one to start tracking sessions.</p>
+                <button
+                  onClick={() => setShowAddTuitionModal(true)}
+                  className="px-4 py-2 bg-[#8ab4f8] hover:bg-[#aecbfa] text-[#202124] rounded-xl text-xs font-medium transition-colors"
+                >
+                  Add Your First Tuition
+                </button>
+              </div>
+            ) : (
+              <>
             <div className="bg-[#202124] border border-[#5f6368] rounded-2xl p-4 shadow-sm space-y-3">
-              <div className="flex justify-between items-center">
-                <h2 className="text-base font-medium text-[#e8eaed]">Tuition Tracker</h2>
-                <span className="text-[10px] bg-[#81c995]/10 text-[#81c995] px-2 py-0.5 rounded-md">Goal: 16 Days</span>
+              <div className="flex justify-between items-center gap-2">
+                <h2 className="text-base font-medium text-[#e8eaed]">{activeTuition.name}</h2>
+                <div className="flex items-center gap-1.5 bg-[#81c995]/10 text-[#81c995] px-2 py-0.5 rounded-md">
+                  <span className="text-[10px]">Goal:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    defaultValue={activeTuition.targetDays || 1}
+                    key={`target-${activeTuition.id}-${activeTuition.targetDays}`}
+                    onBlur={(e) => handleUpdateTuitionProfile('targetDays', e.target.value)}
+                    className="w-10 bg-transparent text-[10px] font-medium text-[#81c995] focus:outline-none text-center"
+                  />
+                  <span className="text-[10px]">Days</span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -979,8 +1194,11 @@ export default function TrackerApp() {
                   <span className="text-xs text-[#9aa0a6]">৳</span>
                   <input 
                     type="number"
-                    value={defaultFare}
-                    onChange={(e) => setDefaultFare(e.target.value)}
+                    min="0"
+                    step="any"
+                    defaultValue={activeTuition.defaultFare ?? 0}
+                    key={`fare-${activeTuition.id}-${activeTuition.defaultFare}`}
+                    onBlur={(e) => handleUpdateTuitionProfile('defaultFare', e.target.value)}
                     className="w-12 bg-transparent text-xs font-medium text-[#81c995] focus:outline-none"
                   />
                 </div>
@@ -1015,7 +1233,7 @@ export default function TrackerApp() {
                   const dayNum = i + 1;
                   const targetDate = new Date(year, month, dayNum);
                   const dateStr = getDateKey(targetDate);
-                  const isLogged = tuitionSessions.some(s => getDateKey(s.date) === dateStr);
+                  const isLogged = activeProfileSessions.some(s => getDateKey(s.date) === dateStr);
                   const isToday = dateStr === getDateKey(new Date());
 
                   return (
@@ -1036,6 +1254,8 @@ export default function TrackerApp() {
                 })}
               </div>
             </div>
+              </>
+            )}
 
           </div>
         )}

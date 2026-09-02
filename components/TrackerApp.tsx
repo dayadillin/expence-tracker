@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Home, PlusCircle, BookOpen, ArrowUpRight, ArrowDownLeft, 
   Calendar as CalendarIcon, Clock, CheckCircle2, 
@@ -204,6 +204,81 @@ function AddTuitionModal({ isOpen, onClose, onConfirm }) {
         </button>
       </form>
     </Modal>
+  );
+}
+
+// --- SWIPE TO DELETE COMPONENT ---
+function SwipeToDelete({ onDelete, children }: { onDelete: () => void; children: React.ReactNode }) {
+  const [swipeX, setSwipeX] = useState(0);
+  const [isSwiped, setIsSwiped] = useState(false);
+  const startXRef = useRef<number | null>(null);
+  const isDragging = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const SWIPE_THRESHOLD = 60;
+
+  const handleStart = (clientX: number) => {
+    startXRef.current = clientX;
+    isDragging.current = true;
+  };
+
+  const handleMove = (clientX: number) => {
+    if (!isDragging.current || startXRef.current === null) return;
+    const diff = startXRef.current - clientX;
+    if (diff > 0) setSwipeX(Math.min(diff, 80));
+  };
+
+  const handleEnd = () => {
+    isDragging.current = false;
+    if (swipeX >= SWIPE_THRESHOLD) {
+      setSwipeX(80);
+      setIsSwiped(true);
+    } else {
+      setSwipeX(0);
+      setIsSwiped(false);
+    }
+    startXRef.current = null;
+  };
+
+  const handleReset = () => {
+    setSwipeX(0);
+    setIsSwiped(false);
+  };
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl" ref={containerRef}>
+      {/* Red delete background */}
+      <div
+        className="absolute inset-y-0 right-0 flex items-center justify-end rounded-2xl bg-red-500 pr-4 transition-all duration-200"
+        style={{ width: `${swipeX}px` }}
+      >
+        {isSwiped && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="flex flex-col items-center gap-0.5 text-white"
+          >
+            <Trash2 size={14} />
+            <span className="text-[9px] font-bold uppercase tracking-wide">Delete</span>
+          </button>
+        )}
+      </div>
+
+      {/* Swipeable content */}
+      <div
+        className="relative touch-pan-y transition-transform duration-150 ease-out"
+        style={{ transform: `translateX(-${swipeX}px)` }}
+        onTouchStart={(e) => handleStart(e.touches[0].clientX)}
+        onTouchMove={(e) => handleMove(e.touches[0].clientX)}
+        onTouchEnd={handleEnd}
+        onMouseDown={(e) => handleStart(e.clientX)}
+        onMouseMove={(e) => { if (isDragging.current) handleMove(e.clientX); }}
+        onMouseUp={handleEnd}
+        onMouseLeave={handleEnd}
+        onClick={() => { if (isSwiped) handleReset(); }}
+      >
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -1057,29 +1132,30 @@ export default function TrackerApp() {
                         </div>
                         <div className="space-y-2">
                           {dayItems.map((item, i) => (
-                            <div
+                            <SwipeToDelete
                               key={item.id}
-                              className="hover-lift group flex items-center justify-between rounded-2xl border border-green-100 bg-white p-3 shadow-sm"
-                              style={{ animationDelay: `${groupIdx * 0.08 + i * 0.04}s` }}
+                              onDelete={() => { setSelectedTransaction(item.id); setShowDeleteModal(true); }}
                             >
-                              <div className="flex items-center gap-3">
-                                <div className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs font-bold ${item.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-800'}`}>
-                                  {item.type === 'income' ? '↑' : '↓'}
+                              <div
+                                className="hover-lift flex items-center justify-between rounded-2xl border border-green-100 bg-white p-3 shadow-sm"
+                                style={{ animationDelay: `${groupIdx * 0.08 + i * 0.04}s` }}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs font-bold ${item.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-800'}`}>
+                                    {item.type === 'income' ? '↑' : '↓'}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-semibold text-gray-900">{item.category}</p>
+                                    <p className="text-[10px] text-gray-400">{item.date}</p>
+                                  </div>
                                 </div>
-                                <div>
-                                  <p className="text-sm font-semibold text-gray-900">{item.category}</p>
-                                  <p className="text-[10px] text-gray-400">{item.date}</p>
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-sm font-bold ${item.type === 'income' ? 'text-green-600' : 'text-gray-900'}`}>
+                                    {item.type === 'income' ? '+' : '−'}৳{item.amount.toLocaleString()}
+                                  </span>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className={`text-sm font-bold ${item.type === 'income' ? 'text-green-600' : 'text-gray-900'}`}>
-                                  {item.type === 'income' ? '+' : '−'}৳{item.amount.toLocaleString()}
-                                </span>
-                                <button onClick={() => { setSelectedTransaction(item.id); setShowDeleteModal(true); }} className="rounded-lg p-1 text-gray-400 opacity-0 transition group-hover:opacity-100 hover:text-gray-900">
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            </div>
+                            </SwipeToDelete>
                           ))}
                         </div>
                       </div>

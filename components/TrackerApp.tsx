@@ -12,7 +12,7 @@ import {
 import { db } from '../firebase';
 import { 
   collection, addDoc, query, deleteDoc, doc, 
-  updateDoc, setDoc, where, onSnapshot 
+  updateDoc, setDoc, where, onSnapshot, deleteField 
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import LoginModal from './LoginModal';
@@ -21,6 +21,7 @@ import SettingsModal from './SettingsModal';
 import AnimatedNumber from './AnimatedNumber';
 import BottomNav from './BottomNav';
 import SectionHeader from './SectionHeader';
+import AppBackground from './AppBackground';
 
 // --- Types ---
 interface Transaction {
@@ -42,6 +43,8 @@ interface TuitionProfile {
   defaultFare: number;
   userId: string;
   createdAt?: string;
+  startDate?: string;
+  weeklyDays?: number[];
 }
 
 interface TuitionSession {
@@ -50,6 +53,7 @@ interface TuitionSession {
   userId: string;
   tuitionProfileId?: string;
   transactionId?: string;
+  transportAmount?: number;
   createdAt?: string;
 }
 
@@ -60,12 +64,14 @@ interface ModalProps {
   children: React.ReactNode;
 }
 
-interface FareModalProps {
+interface TuitionSessionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (fare: number) => void;
+  onConfirm: (fare: number, deductFromMain: boolean) => Promise<boolean>;
+  onRemove?: () => Promise<boolean>;
   date: Date;
   defaultFare: string;
+  existingSession?: TuitionSession | null;
 }
 
 interface DeleteConfirmModalProps {
@@ -87,7 +93,13 @@ interface BudgetModalProps {
 interface AddTuitionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (name: string, targetDays: string, defaultFare: string) => void;
+  onConfirm: (data: {
+    name: string;
+    targetDays: string;
+    defaultFare: string;
+    startDate: string;
+    weeklyDays: number[];
+  }) => void;
 }
 
 interface EditTransactionModalProps {
@@ -116,6 +128,11 @@ const CATEGORY_COLORS = [
   '#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
   '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16'
 ];
+
+const TRANSPORT_TO_TUITION_CATEGORY = 'Transport to Tuition';
+
+const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const WEEKDAY_SHORT = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
 // --- Helper Functions ---
 const getDateKey = (date: Date | string | number): string => {
@@ -149,6 +166,44 @@ const formatDisplayDate = (dateStr: string): string => {
   });
 };
 
+const isScheduledTuitionDay = (date: Date, profile: TuitionProfile): boolean => {
+  if (!profile.startDate || !profile.weeklyDays?.length) return false;
+  const dateKey = getDateKey(date);
+  if (dateKey < profile.startDate) return false;
+  return profile.weeklyDays.includes(date.getDay());
+};
+
+const getWeekDates = (reference: Date): Date[] => {
+  const start = new Date(reference);
+  start.setDate(start.getDate() - start.getDay());
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+};
+
+const getFrequencySorted = (items: string[]): string[] => {
+  const counts: Record<string, number> = {};
+  items.forEach((item) => {
+    counts[item] = (counts[item] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([item]) => item);
+};
+
+const getAmountFrequencySorted = (amounts: number[]): number[] => {
+  const counts: Record<string, number> = {};
+  amounts.forEach((amt) => {
+    const key = String(amt);
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([amt]) => parseFloat(amt));
+};
+
 // --- MODAL COMPONENTS ---
 function Modal({ isOpen, onClose, title, children }: ModalProps) {
   if (!isOpen) return null;
@@ -177,42 +232,97 @@ function Modal({ isOpen, onClose, title, children }: ModalProps) {
   );
 }
 
-function FareModal({ isOpen, onClose, onConfirm, date, defaultFare }: FareModalProps) {
+function TuitionSessionModal({ isOpen, onClose, onConfirm, onRemove, date, defaultFare, existingSession }: TuitionSessionModalProps) {
   const [fare, setFare] = useState(defaultFare);
+  const [deductFromMain, setDeductFromMain] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setFare(defaultFare);
-  }, [defaultFare, isOpen]);
+    if (existingSession) {
+      setFare(String(existingSession.transportAmount ?? defaultFare));
+      setDeductFromMain(!!existingSession.transactionId);
+    } else {
+      setFare(defaultFare);
+      setDeductFromMain(false);
+    }
+  }, [defaultFare, isOpen, existingSession]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onConfirm(parseFloat(fare) || 0);
-    onClose();
+    setSaving(true);
+    try {
+      const success = await onConfirm(parseFloat(fare) || 0, deductFromMain);
+      if (success) onClose();
+    } finally {
+      setSaving(false);
+    }
   };
 
+  const handleRemove = async () => {
+    if (!onRemove) return;
+    setSaving(true);
+    try {
+      const success = await onRemove();
+      if (success) onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isEditing = !!existingSession;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Transport Fare - ${date.toLocaleDateString()}`}>
+    <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? `Tuition Session - ${date.toLocaleDateString()}` : `Log Session - ${date.toLocaleDateString()}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <p className="text-xs text-gray-500 dark:text-gray-400">Enter round-trip transport fare for this session:</p>
-        <div className="flex items-center gap-2 bg-green-50 dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 rounded-xl px-3 py-2">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">৳</span>
-          <input
-            type="number"
-            step="any"
-            value={fare}
-            onChange={(e) => setFare(e.target.value)}
-            className="flex-1 bg-transparent font-medium text-base text-green-600 dark:text-green-400 focus:outline-none"
-            autoFocus
-            required
-          />
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          {isEditing ? 'Update transport fare and deduction settings:' : 'Record attendance and transport fare for this session:'}
+        </p>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Transport Fare (৳)</label>
+          <div className="flex items-center gap-2 bg-green-50 dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 rounded-xl px-3 py-2">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">৳</span>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              value={fare}
+              onChange={(e) => setFare(e.target.value)}
+              className="flex-1 bg-transparent font-medium text-base text-green-600 dark:text-green-400 focus:outline-none"
+              autoFocus
+              required
+            />
+          </div>
         </div>
-        <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className="px-4 py-2 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg text-xs font-medium text-green-600 dark:text-green-400 transition-colors">
-            Cancel
-          </button>
-          <button type="submit" className="px-4 py-2 bg-green-500 hover:bg-green-400 text-white rounded-lg text-xs font-medium transition-colors shadow-md shadow-green-500/20">
-            Confirm
-          </button>
+
+        <label className="flex items-start gap-3 rounded-xl border border-green-200 dark:border-green-800/60 bg-green-50/50 dark:bg-green-950/20 p-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={deductFromMain}
+            onChange={(e) => setDeductFromMain(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-green-300 text-green-600 focus:ring-green-500"
+          />
+          <div>
+            <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">Deduct from Main Expense Tracker</span>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+              Adds ৳{fare || '0'} as &quot;{TRANSPORT_TO_TUITION_CATEGORY}&quot; in your ledger
+            </p>
+          </div>
+        </label>
+
+        <div className="flex justify-between gap-2 pt-1">
+          {isEditing && onRemove ? (
+            <button type="button" onClick={handleRemove} disabled={saving} className="px-4 py-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg text-xs font-medium text-red-600 dark:text-red-400 transition-colors disabled:opacity-50">
+              Remove Session
+            </button>
+          ) : <div />}
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg text-xs font-medium text-green-600 dark:text-green-400 transition-colors disabled:opacity-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="px-4 py-2 bg-green-500 hover:bg-green-400 text-white rounded-lg text-xs font-medium transition-colors shadow-md shadow-green-500/20 disabled:opacity-50">
+              {saving ? 'Saving…' : isEditing ? 'Save Changes' : 'Log Session'}
+            </button>
+          </div>
         </div>
       </form>
     </Modal>
@@ -290,60 +400,152 @@ function BudgetModal({ isOpen, onClose, categories, budgets, onSave }: BudgetMod
 }
 
 function AddTuitionModal({ isOpen, onClose, onConfirm }: AddTuitionModalProps) {
+  const [step, setStep] = useState(1);
   const [name, setName] = useState('');
+  const [startDate, setStartDate] = useState(getDateKey(new Date()));
+  const [weeklyDays, setWeeklyDays] = useState<number[]>([]);
   const [targetDays, setTargetDays] = useState('8');
   const [defaultFare, setDefaultFare] = useState('100');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onConfirm(name, targetDays, defaultFare);
+  const resetForm = () => {
+    setStep(1);
     setName('');
+    setStartDate(getDateKey(new Date()));
+    setWeeklyDays([]);
     setTargetDays('8');
     setDefaultFare('100');
+  };
+
+  const toggleDay = (day: number) => {
+    setWeeklyDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b)
+    );
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (step < 3) {
+      setStep(step + 1);
+      return;
+    }
+    onConfirm({ name, targetDays, defaultFare, startDate, weeklyDays });
+    resetForm();
   };
 
   if (!isOpen) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Tuition Profile">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Add Tuition Profile">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Tuition Name</label>
-          <input
-            type="text"
-            placeholder="e.g. Math, Physics, Student A"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full bg-green-50 dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 focus:border-green-500 p-3 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none"
-            required
-          />
+        <div className="flex gap-1 mb-2">
+          {[1, 2, 3].map((s) => (
+            <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${s <= step ? 'bg-green-500' : 'bg-green-100 dark:bg-green-900/40'}`} />
+          ))}
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Monthly Day Goal</label>
-          <input
-            type="number"
-            min="1"
-            value={targetDays}
-            onChange={(e) => setTargetDays(e.target.value)}
-            className="w-full bg-green-50 dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 focus:border-green-500 p-3 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none"
-            required
-          />
+
+        {step === 1 && (
+          <>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Tuition Name</label>
+              <input
+                type="text"
+                placeholder="e.g. Math, Physics, Student A"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full bg-green-50 dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 focus:border-green-500 p-3 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">From which date will this tuition start?</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full bg-green-50 dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 focus:border-green-500 p-3 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none"
+                required
+              />
+            </div>
+          </>
+        )}
+
+        {step === 2 && (
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Which days of the week will you attend?</label>
+            <div className="grid grid-cols-2 gap-2">
+              {WEEKDAY_LABELS.map((label, dayIndex) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => toggleDay(dayIndex)}
+                  className={`rounded-xl border px-3 py-2.5 text-xs font-bold transition-all ${
+                    weeklyDays.includes(dayIndex)
+                      ? 'border-green-500 bg-green-500 text-white shadow-md shadow-green-500/30'
+                      : 'border-green-200 dark:border-green-800/60 bg-green-50 dark:bg-[#0a110c] text-gray-600 dark:text-gray-300 hover:border-green-400'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {weeklyDays.length === 0 && (
+              <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-2">Select at least one day</p>
+            )}
+          </div>
+        )}
+
+        {step === 3 && (
+          <>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Monthly Day Goal</label>
+              <input
+                type="number"
+                min="1"
+                value={targetDays}
+                onChange={(e) => setTargetDays(e.target.value)}
+                className="w-full bg-green-50 dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 focus:border-green-500 p-3 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Default Transport Fare / Trip (৳)</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={defaultFare}
+                onChange={(e) => setDefaultFare(e.target.value)}
+                className="w-full bg-green-50 dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 focus:border-green-500 p-3 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none"
+                required
+              />
+            </div>
+            <div className="rounded-xl bg-green-50 dark:bg-green-950/30 border border-green-100 dark:border-green-900/30 p-3 text-[10px] text-gray-500 dark:text-gray-400">
+              <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Schedule summary</p>
+              <p>Starts: {formatDisplayDate(startDate)}</p>
+              <p>Days: {weeklyDays.map((d) => WEEKDAY_LABELS[d]).join(', ') || 'None'}</p>
+            </div>
+          </>
+        )}
+
+        <div className="flex gap-2">
+          {step > 1 && (
+            <button type="button" onClick={() => setStep(step - 1)} className="flex-1 border border-green-200 dark:border-green-800/60 hover:bg-green-50 dark:hover:bg-green-950/40 text-gray-700 dark:text-gray-300 font-medium py-2.5 rounded-xl transition-colors text-xs">
+              Back
+            </button>
+          )}
+          <button
+            type="submit"
+            disabled={step === 2 && weeklyDays.length === 0}
+            className="flex-1 bg-green-500 hover:bg-green-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-xl transition-colors text-sm shadow-md shadow-green-500/20"
+          >
+            {step < 3 ? 'Continue' : 'Add Tuition'}
+          </button>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Transport Fare / Trip (৳)</label>
-          <input
-            type="number"
-            min="0"
-            step="any"
-            value={defaultFare}
-            onChange={(e) => setDefaultFare(e.target.value)}
-            className="w-full bg-green-50 dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 focus:border-green-500 p-3 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none"
-            required
-          />
-        </div>
-        <button type="submit" className="w-full bg-green-500 hover:bg-green-400 text-white font-medium py-2.5 rounded-xl transition-colors text-sm shadow-md shadow-green-500/20">
-          Add Tuition
-        </button>
       </form>
     </Modal>
   );
@@ -477,10 +679,12 @@ function SwipeToDelete({
   const [swipeX, setSwipeX] = useState(0);
   const [isSwiped, setIsSwiped] = useState(false);
   const startXRef = useRef<number | null>(null);
+  const swipeXRef = useRef(0);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const SWIPE_THRESHOLD = 50;
+  const maxReveal = onEdit ? 120 : 75;
 
   const handleStart = (clientX: number) => {
     startXRef.current = clientX;
@@ -491,17 +695,21 @@ function SwipeToDelete({
     if (!isDragging.current || startXRef.current === null) return;
     const diff = startXRef.current - clientX;
     if (diff > 0) {
-      setSwipeX(Math.min(diff, onEdit ? 120 : 75));
+      const next = Math.min(diff, maxReveal);
+      swipeXRef.current = next;
+      setSwipeX(next);
     }
   };
 
   const handleEnd = () => {
     isDragging.current = false;
-    const maxReveal = onEdit ? 120 : 75;
-    if (swipeX >= SWIPE_THRESHOLD) {
+    const currentSwipe = swipeXRef.current;
+    if (currentSwipe >= SWIPE_THRESHOLD) {
+      swipeXRef.current = maxReveal;
       setSwipeX(maxReveal);
       setIsSwiped(true);
     } else {
+      swipeXRef.current = 0;
       setSwipeX(0);
       setIsSwiped(false);
     }
@@ -509,6 +717,7 @@ function SwipeToDelete({
   };
 
   const handleReset = () => {
+    swipeXRef.current = 0;
     setSwipeX(0);
     setIsSwiped(false);
   };
@@ -596,7 +805,12 @@ export default function TrackerApp() {
   const [category, setCategory] = useState('');
   const [customDate, setCustomDate] = useState(getDateKey(new Date()));
   const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
+  const [filteredAmountSuggestions, setFilteredAmountSuggestions] = useState<number[]>([]);
+  const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
+  const [showAmountSuggestions, setShowAmountSuggestions] = useState(false);
+  const [activeFormType, setActiveFormType] = useState<'income' | 'expense'>('expense');
   const [calendarDate, setCalendarDate] = useState(new Date());
+  const [tuitionViewMode, setTuitionViewMode] = useState<'week' | 'month'>('month');
   const [budgetLimits, setBudgetLimits] = useState<Record<string, number>>({});
 
   // Modals & Selection states
@@ -615,6 +829,7 @@ export default function TrackerApp() {
   const [deletedTxBackup, setDeletedTxBackup] = useState<Transaction | null>(null);
   const [undoToastVisible, setUndoToastVisible] = useState(false);
   const undoTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isLoggingOutRef = useRef(false);
 
   // Dark Mode init
   useEffect(() => {
@@ -650,6 +865,9 @@ export default function TrackerApp() {
     setCategory('');
     setCustomDate(getDateKey(new Date()));
     setFilteredSuggestions([]);
+    setFilteredAmountSuggestions([]);
+    setShowCategorySuggestions(false);
+    setShowAmountSuggestions(false);
     setBudgetLimits({});
     setSearchQuery('');
     setSelectedDate(null);
@@ -667,10 +885,11 @@ export default function TrackerApp() {
   }, []);
 
   const handleLogout = async () => {
-    clearUserData();
     try {
+      isLoggingOutRef.current = true;
       await logout();
     } catch (error) {
+      isLoggingOutRef.current = false;
       console.error('Error logging out:', error);
     }
   };
@@ -694,6 +913,7 @@ export default function TrackerApp() {
   // Firebase Realtime Subscriptions
   useEffect(() => {
     if (!user) {
+      isLoggingOutRef.current = false;
       clearUserData();
       return;
     }
@@ -717,6 +937,7 @@ export default function TrackerApp() {
     const unsubscribeTx = onSnapshot(
       txQuery,
       (snapshot) => {
+        if (isLoggingOutRef.current) return;
         try {
           const txList = snapshot.docs
             .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Transaction))
@@ -737,6 +958,7 @@ export default function TrackerApp() {
     const unsubscribeTuition = onSnapshot(
       tuitionQuery,
       (snapshot) => {
+        if (isLoggingOutRef.current) return;
         try {
           const tuitionList = snapshot.docs
             .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as TuitionSession))
@@ -754,6 +976,7 @@ export default function TrackerApp() {
     const unsubscribeTuitionProfiles = onSnapshot(
       tuitionProfilesQuery,
       (snapshot) => {
+        if (isLoggingOutRef.current) return;
         try {
           const profiles = snapshot.docs
             .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as TuitionProfile))
@@ -771,6 +994,7 @@ export default function TrackerApp() {
     const unsubscribeBudgets = onSnapshot(
       budgetDocRef,
       (docSnap) => {
+        if (isLoggingOutRef.current) return;
         if (docSnap.exists()) {
           setBudgetLimits(docSnap.data().limits || {});
         } else {
@@ -825,14 +1049,58 @@ export default function TrackerApp() {
     [getProfileSessions, selectedTuitionId]
   );
 
+  const frequentIncomeCategories = useMemo(() => {
+    const fromTx = getFrequencySorted(
+      transactions.filter((t) => t.type === 'income').map((t) => t.category)
+    );
+    return [...new Set([...fromTx, ...incomeCategories])];
+  }, [transactions, incomeCategories]);
+
+  const frequentExpenseCategories = useMemo(() => {
+    const fromTx = getFrequencySorted(
+      transactions.filter((t) => t.type === 'expense').map((t) => t.category)
+    );
+    return [...new Set([...fromTx, ...expenseCategories])];
+  }, [transactions, expenseCategories]);
+
+  const frequentIncomeAmounts = useMemo(
+    () => getAmountFrequencySorted(transactions.filter((t) => t.type === 'income').map((t) => t.amount)),
+    [transactions]
+  );
+
+  const frequentExpenseAmounts = useMemo(
+    () => getAmountFrequencySorted(transactions.filter((t) => t.type === 'expense').map((t) => t.amount)),
+    [transactions]
+  );
+
+  const getCategorySuggestions = (type: 'income' | 'expense', filter: string) => {
+    const pool = type === 'income' ? frequentIncomeCategories : frequentExpenseCategories;
+    if (!filter.trim()) return pool.slice(0, 8);
+    return pool.filter((item) => item.toLowerCase().includes(filter.toLowerCase())).slice(0, 8);
+  };
+
+  const getAmountSuggestions = (type: 'income' | 'expense') => {
+    const pool = type === 'income' ? frequentIncomeAmounts : frequentExpenseAmounts;
+    return pool.slice(0, 6);
+  };
+
   const handleCategoryChange = (val: string, type: 'income' | 'expense') => {
     setCategory(val);
-    const pool = type === 'income' ? incomeCategories : expenseCategories;
-    if (val.trim() === '') {
-      setFilteredSuggestions([]);
-    } else {
-      setFilteredSuggestions(pool.filter(item => item.toLowerCase().includes(val.toLowerCase())).slice(0, 6));
-    }
+    setActiveFormType(type);
+    setFilteredSuggestions(getCategorySuggestions(type, val));
+    setShowCategorySuggestions(true);
+  };
+
+  const handleCategoryFocus = (type: 'income' | 'expense') => {
+    setActiveFormType(type);
+    setFilteredSuggestions(getCategorySuggestions(type, category));
+    setShowCategorySuggestions(true);
+  };
+
+  const handleAmountFocus = (type: 'income' | 'expense') => {
+    setActiveFormType(type);
+    setFilteredAmountSuggestions(getAmountSuggestions(type));
+    setShowAmountSuggestions(true);
   };
 
   const handleSaveBudgets = async (newBudgets: Record<string, number>) => {
@@ -864,6 +1132,9 @@ export default function TrackerApp() {
       setCategory('');
       setCustomDate(getDateKey(new Date()));
       setFilteredSuggestions([]);
+      setFilteredAmountSuggestions([]);
+      setShowCategorySuggestions(false);
+      setShowAmountSuggestions(false);
       setActiveTab('home');
     } catch (error) {
       console.error('Error saving transaction:', error);
@@ -893,6 +1164,11 @@ export default function TrackerApp() {
     const target = transactions.find((t) => t.id === id);
 
     try {
+      const linkedSessions = tuitionSessions.filter((s) => s.transactionId === id);
+      for (const session of linkedSessions) {
+        await updateDoc(doc(db, 'tuition', session.id), { transactionId: deleteField() });
+      }
+
       await deleteDoc(doc(db, 'transactions', id));
       setShowDeleteModal(false);
       setSelectedTransaction(null);
@@ -916,9 +1192,9 @@ export default function TrackerApp() {
     if (!deletedTxBackup || !user) return;
     try {
       const { id, ...data } = deletedTxBackup;
-      await addDoc(collection(db, 'transactions'), {
+      await setDoc(doc(db, 'transactions', id), {
         ...data,
-        userId: user.uid
+        userId: user.uid,
       });
       setUndoToastVisible(false);
       setDeletedTxBackup(null);
@@ -931,8 +1207,7 @@ export default function TrackerApp() {
     if (!user || !selectedTuitionId) return;
 
     try {
-      // Delete all sessions for this tuition
-      const sessionsToDelete = tuitionSessions.filter(s => s.tuitionProfileId === selectedTuitionId);
+      const sessionsToDelete = getProfileSessions(selectedTuitionId);
       for (const session of sessionsToDelete) {
         await deleteDoc(doc(db, 'tuition', session.id));
         if (session.transactionId) {
@@ -953,14 +1228,22 @@ export default function TrackerApp() {
     setShowFareModal(true);
   };
 
-  const handleAddTuition = async (name: string, targetDays: string, defaultFare: string) => {
+  const handleAddTuition = async (data: {
+    name: string;
+    targetDays: string;
+    defaultFare: string;
+    startDate: string;
+    weeklyDays: number[];
+  }) => {
     if (!user) return;
 
     try {
       const profileRef = await addDoc(collection(db, 'tuitionProfiles'), {
-        name: name.trim(),
-        targetDays: Math.max(1, parseInt(targetDays, 10) || 1),
-        defaultFare: parseFloat(defaultFare) || 0,
+        name: data.name.trim(),
+        targetDays: Math.max(1, parseInt(data.targetDays, 10) || 1),
+        defaultFare: parseFloat(data.defaultFare) || 0,
+        startDate: data.startDate,
+        weeklyDays: data.weeklyDays,
         userId: user.uid,
         createdAt: new Date().toISOString(),
       });
@@ -989,45 +1272,104 @@ export default function TrackerApp() {
     }
   };
 
-  const handleFareConfirm = async (fareAmount: number) => {
-    if (!user || !selectedDate || !selectedTuitionId || !activeTuition) return;
+  const createTransportTransaction = async (
+    sessionId: string,
+    profileId: string,
+    dateKey: string,
+    fareAmount: number
+  ) => {
+    if (!user) return null;
+    const transportRef = await addDoc(collection(db, 'transactions'), {
+      amount: fareAmount,
+      type: 'expense',
+      category: TRANSPORT_TO_TUITION_CATEGORY,
+      date: dateKey,
+      timestamp: new Date().toISOString(),
+      tuitionSessionId: sessionId,
+      tuitionProfileId: profileId,
+      userId: user.uid,
+    });
+    return transportRef.id;
+  };
+
+  const handleSessionConfirm = async (fareAmount: number, deductFromMain: boolean): Promise<boolean> => {
+    if (!user || !selectedDate || !selectedTuitionId || !activeTuition) return false;
     const dateKey = getDateKey(selectedDate);
     const existingSession = activeProfileSessions.find((s) => getDateKey(s.date) === dateKey);
 
     try {
       if (existingSession) {
-        await deleteDoc(doc(db, 'tuition', existingSession.id));
-        if (existingSession.transactionId) {
+        const updates: Record<string, unknown> = {
+          transportAmount: fareAmount,
+        };
+
+        if (deductFromMain && fareAmount > 0) {
+          if (existingSession.transactionId) {
+            await updateDoc(doc(db, 'transactions', existingSession.transactionId), {
+              amount: fareAmount,
+              date: dateKey,
+              category: TRANSPORT_TO_TUITION_CATEGORY,
+              updatedAt: new Date().toISOString(),
+            });
+          } else {
+            const txId = await createTransportTransaction(
+              existingSession.id,
+              selectedTuitionId,
+              dateKey,
+              fareAmount
+            );
+            if (txId) updates.transactionId = txId;
+          }
+        } else if (existingSession.transactionId) {
           await deleteDoc(doc(db, 'transactions', existingSession.transactionId));
+          updates.transactionId = deleteField();
         }
+
+        await updateDoc(doc(db, 'tuition', existingSession.id), updates);
       } else {
-        const sessionRef = await addDoc(collection(db, 'tuition'), { 
+        const sessionRef = await addDoc(collection(db, 'tuition'), {
           date: dateKey,
           createdAt: new Date().toISOString(),
           userId: user.uid,
           tuitionProfileId: selectedTuitionId,
+          transportAmount: fareAmount,
         });
 
-        if (fareAmount > 0) {
-          const transportRef = await addDoc(collection(db, 'transactions'), {
-            amount: fareAmount,
-            type: 'expense',
-            category: `${activeTuition.name} Transport - ${selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
-            date: dateKey,
-            timestamp: new Date().toISOString(),
-            tuitionSessionId: sessionRef.id,
-            tuitionProfileId: selectedTuitionId,
-            userId: user.uid,
-          });
-
-          await updateDoc(sessionRef, { transactionId: transportRef.id });
+        if (deductFromMain && fareAmount > 0) {
+          const txId = await createTransportTransaction(
+            sessionRef.id,
+            selectedTuitionId,
+            dateKey,
+            fareAmount
+          );
+          if (txId) {
+            await updateDoc(sessionRef, { transactionId: txId });
+          }
         }
       }
 
-      setShowFareModal(false);
-      setSelectedDate(null);
+      return true;
     } catch (error) {
-      console.error('Error updating tuition date:', error);
+      console.error('Error updating tuition session:', error);
+      return false;
+    }
+  };
+
+  const handleSessionRemove = async (): Promise<boolean> => {
+    if (!user || !selectedDate) return false;
+    const dateKey = getDateKey(selectedDate);
+    const existingSession = activeProfileSessions.find((s) => getDateKey(s.date) === dateKey);
+    if (!existingSession) return false;
+
+    try {
+      await deleteDoc(doc(db, 'tuition', existingSession.id));
+      if (existingSession.transactionId) {
+        await deleteDoc(doc(db, 'transactions', existingSession.transactionId));
+      }
+      return true;
+    } catch (error) {
+      console.error('Error removing tuition session:', error);
+      return false;
     }
   };
 
@@ -1160,6 +1502,12 @@ export default function TrackerApp() {
   }).length;
   const homeTargetSessions = homeTuition?.targetDays || 0;
 
+  const selectedExistingSession = selectedDate
+    ? activeProfileSessions.find((s) => getDateKey(s.date) === getDateKey(selectedDate)) || null
+    : null;
+
+  const weekDates = getWeekDates(calendarDate);
+
   // Budget tracking
   const getBudgetStatus = (cat: string) => {
     const spent = transactions
@@ -1183,8 +1531,9 @@ export default function TrackerApp() {
 
   if (!mounted || authLoading || loading) {
     return (
-      <div className="min-h-screen bg-[#f8fdf9] dark:bg-[#090d0b] flex items-center justify-center" suppressHydrationWarning>
-        <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+      <div className="finance-app app-shell-bg relative min-h-screen flex items-center justify-center" suppressHydrationWarning>
+        <AppBackground moneyRain={false} />
+        <div className="relative z-10 w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -1195,16 +1544,22 @@ export default function TrackerApp() {
   const initials = nickname.slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-[#f8fdf9] dark:bg-[#090d0b] text-gray-900 dark:text-gray-100 flex flex-col font-sans pb-28 transition-colors duration-200" suppressHydrationWarning>
-      
+    <div className="finance-app relative min-h-screen app-shell-bg text-gray-900 dark:text-gray-100 flex flex-col font-sans pb-28 transition-colors duration-200" suppressHydrationWarning>
+      <AppBackground moneyRain={false} />
+
+      <div className="relative z-10 flex flex-col flex-1">
       {/* --- MODALS --- */}
-      <FareModal
+      <TuitionSessionModal
         key={selectedTuitionId || 'no-tuition'}
         isOpen={showFareModal}
         onClose={() => { setShowFareModal(false); setSelectedDate(null); }}
-        onConfirm={handleFareConfirm}
+        onConfirm={handleSessionConfirm}
+        onRemove={selectedExistingSession ? handleSessionRemove : undefined}
         date={selectedDate || new Date()}
-        defaultFare={String(activeTuition?.defaultFare ?? 100)}
+        defaultFare={String(
+          selectedExistingSession?.transportAmount ?? activeTuition?.defaultFare ?? 100
+        )}
+        existingSession={selectedExistingSession}
       />
 
       <DeleteConfirmModal
@@ -1261,7 +1616,7 @@ export default function TrackerApp() {
       <header className="sticky top-0 z-40 mx-auto w-full max-w-md animate-fade-up">
         <div className="mx-3 mt-3 flex items-center justify-between rounded-2xl border border-green-200/80 dark:border-green-800/40 glass-card px-4 py-3 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500 text-white shadow-lg shadow-green-500/30 animate-float-gentle">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl accent-gradient text-white shadow-lg shadow-green-500/20 animate-float-gentle icon-mono">
               <Wallet size={20} />
             </div>
             <div>
@@ -1475,10 +1830,10 @@ export default function TrackerApp() {
                 <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Tuition</h3>
                 <p className="text-[10px] text-gray-500 dark:text-gray-400">Calendar & Goal</p>
               </button>
-              <button onClick={() => { setActiveTab('add-money'); setAmount(''); setCategory(''); setCustomDate(getDateKey(new Date())); }} className="hover-lift rounded-2xl bg-green-500 py-3 text-xs font-bold text-white shadow-md shadow-green-500/25">
+              <button onClick={() => { setActiveTab('add-money'); setAmount(''); setCategory(''); setCustomDate(getDateKey(new Date())); setActiveFormType('income'); }} className="hover-lift rounded-2xl bg-green-500 py-3 text-xs font-bold text-white shadow-md shadow-green-500/25">
                 + Income
               </button>
-              <button onClick={() => { setActiveTab('add-expense'); setAmount(''); setCategory(''); setCustomDate(getDateKey(new Date())); }} className="hover-lift rounded-2xl bg-gray-900 dark:bg-gray-800 py-3 text-xs font-bold text-white shadow-md">
+              <button onClick={() => { setActiveTab('add-expense'); setAmount(''); setCategory(''); setCustomDate(getDateKey(new Date())); setActiveFormType('expense'); }} className="hover-lift rounded-2xl bg-gray-900 dark:bg-gray-800 py-3 text-xs font-bold text-white shadow-md">
                 − Expense
               </button>
             </div>
@@ -1526,7 +1881,7 @@ export default function TrackerApp() {
 
             <div className="grid grid-cols-1 gap-4">
               <button
-                onClick={() => { setActiveTab('add-money'); setCustomDate(getDateKey(new Date())); }}
+                onClick={() => { setActiveTab('add-money'); setCustomDate(getDateKey(new Date())); setActiveFormType('income'); }}
                 className="hover-lift group relative overflow-hidden rounded-3xl border-2 border-green-300 dark:border-green-800/60 bg-gradient-to-br from-green-50 to-white dark:from-[#0a1f12] dark:to-[#121c15] p-6 text-left shadow-md"
               >
                 <div className="absolute right-4 top-4 opacity-10 transition group-hover:scale-125 group-hover:opacity-20">
@@ -1541,7 +1896,7 @@ export default function TrackerApp() {
               </button>
 
               <button
-                onClick={() => { setActiveTab('add-expense'); setCustomDate(getDateKey(new Date())); }}
+                onClick={() => { setActiveTab('add-expense'); setCustomDate(getDateKey(new Date())); setActiveFormType('expense'); }}
                 className="hover-lift group relative overflow-hidden rounded-3xl border-2 border-gray-300 dark:border-gray-700 bg-gradient-to-br from-gray-50 to-white dark:from-[#131714] dark:to-[#121c15] p-6 text-left shadow-md"
               >
                 <div className="absolute right-4 top-4 opacity-10 transition group-hover:scale-125 group-hover:opacity-20">
@@ -1570,13 +1925,16 @@ export default function TrackerApp() {
                   placeholder="e.g. Mom, Salary, Tuition"
                   value={category}
                   onChange={(e) => handleCategoryChange(e.target.value, 'income')}
+                  onFocus={() => handleCategoryFocus('income')}
+                  onBlur={() => setTimeout(() => setShowCategorySuggestions(false), 150)}
                   className="w-full bg-green-50 dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 focus:border-green-500 p-3 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none"
                   required
                 />
-                {filteredSuggestions.length > 0 && (
+                {showCategorySuggestions && activeFormType === 'income' && filteredSuggestions.length > 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-green-50 dark:bg-[#121c15] border border-green-200 dark:border-green-800/60 rounded-xl shadow-lg overflow-hidden">
-                    {filteredSuggestions.map((s, idx) => (
-                      <div key={idx} onClick={() => { setCategory(s); setFilteredSuggestions([]); }} className="p-2.5 text-xs text-gray-900 dark:text-gray-100 hover:bg-green-100 dark:hover:bg-green-950/50 cursor-pointer border-b border-green-100 dark:border-green-900/30 last:border-none">
+                    <p className="px-3 pt-2 pb-1 text-[9px] font-bold uppercase tracking-wider text-gray-400">Frequently used</p>
+                    {filteredSuggestions.map((s) => (
+                      <div key={s} onMouseDown={() => { setCategory(s); setShowCategorySuggestions(false); }} className="p-2.5 text-xs text-gray-900 dark:text-gray-100 hover:bg-green-100 dark:hover:bg-green-950/50 cursor-pointer border-b border-green-100 dark:border-green-900/30 last:border-none">
                         {s}
                       </div>
                     ))}
@@ -1584,7 +1942,7 @@ export default function TrackerApp() {
                 )}
               </div>
 
-              <div>
+              <div className="relative">
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Amount (৳)</label>
                 <input 
                   type="number"
@@ -1592,9 +1950,28 @@ export default function TrackerApp() {
                   placeholder="0.00"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
+                  onFocus={() => handleAmountFocus('income')}
+                  onBlur={() => setTimeout(() => setShowAmountSuggestions(false), 150)}
                   className="w-full bg-green-50 dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 focus:border-green-500 p-3 rounded-xl font-medium text-base text-green-600 dark:text-green-400 focus:outline-none"
                   required
                 />
+                {showAmountSuggestions && activeFormType === 'income' && filteredAmountSuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-green-50 dark:bg-[#121c15] border border-green-200 dark:border-green-800/60 rounded-xl shadow-lg p-2">
+                    <p className="px-1 pb-1.5 text-[9px] font-bold uppercase tracking-wider text-gray-400">Quick amounts</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {filteredAmountSuggestions.map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onMouseDown={() => { setAmount(String(amt)); setShowAmountSuggestions(false); }}
+                          className="rounded-lg bg-white dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 px-3 py-1.5 text-xs font-bold text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/50 transition"
+                        >
+                          ৳{amt.toLocaleString()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 📅 Custom Date Picker Feature */}
@@ -1628,13 +2005,16 @@ export default function TrackerApp() {
                   placeholder="e.g. Khichuri, Cigarettes, Transport"
                   value={category}
                   onChange={(e) => handleCategoryChange(e.target.value, 'expense')}
+                  onFocus={() => handleCategoryFocus('expense')}
+                  onBlur={() => setTimeout(() => setShowCategorySuggestions(false), 150)}
                   className="w-full bg-green-50 dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 focus:border-gray-400 p-3 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none"
                   required
                 />
-                {filteredSuggestions.length > 0 && (
+                {showCategorySuggestions && activeFormType === 'expense' && filteredSuggestions.length > 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-green-50 dark:bg-[#121c15] border border-green-200 dark:border-green-800/60 rounded-xl shadow-lg overflow-hidden">
-                    {filteredSuggestions.map((s, idx) => (
-                      <div key={idx} onClick={() => { setCategory(s); setFilteredSuggestions([]); }} className="p-2.5 text-xs text-gray-900 dark:text-gray-100 hover:bg-green-100 dark:hover:bg-green-950/50 cursor-pointer border-b border-green-100 dark:border-green-900/30 last:border-none">
+                    <p className="px-3 pt-2 pb-1 text-[9px] font-bold uppercase tracking-wider text-gray-400">Frequently used</p>
+                    {filteredSuggestions.map((s) => (
+                      <div key={s} onMouseDown={() => { setCategory(s); setShowCategorySuggestions(false); }} className="p-2.5 text-xs text-gray-900 dark:text-gray-100 hover:bg-green-100 dark:hover:bg-green-950/50 cursor-pointer border-b border-green-100 dark:border-green-900/30 last:border-none">
                         {s}
                       </div>
                     ))}
@@ -1642,7 +2022,7 @@ export default function TrackerApp() {
                 )}
               </div>
 
-              <div>
+              <div className="relative">
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Amount Spent (৳)</label>
                 <input 
                   type="number"
@@ -1650,9 +2030,28 @@ export default function TrackerApp() {
                   placeholder="0.00"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
+                  onFocus={() => handleAmountFocus('expense')}
+                  onBlur={() => setTimeout(() => setShowAmountSuggestions(false), 150)}
                   className="w-full bg-green-50 dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 focus:border-gray-400 p-3 rounded-xl font-medium text-base text-gray-900 dark:text-gray-100 focus:outline-none"
                   required
                 />
+                {showAmountSuggestions && activeFormType === 'expense' && filteredAmountSuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-green-50 dark:bg-[#121c15] border border-green-200 dark:border-green-800/60 rounded-xl shadow-lg p-2">
+                    <p className="px-1 pb-1.5 text-[9px] font-bold uppercase tracking-wider text-gray-400">Quick amounts</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {filteredAmountSuggestions.map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onMouseDown={() => { setAmount(String(amt)); setShowAmountSuggestions(false); }}
+                          className="rounded-lg bg-white dark:bg-[#0a110c] border border-green-200 dark:border-green-800/60 px-3 py-1.5 text-xs font-bold text-gray-900 dark:text-gray-100 hover:bg-green-100 dark:hover:bg-green-950/50 transition"
+                        >
+                          ৳{amt.toLocaleString()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 📅 Custom Date Picker Feature */}
@@ -1853,52 +2252,161 @@ export default function TrackerApp() {
                         className="w-16 rounded-lg border border-green-200 dark:border-green-800/60 bg-green-50 dark:bg-[#0a110c] px-2 py-1 text-xs font-bold text-green-600 dark:text-green-400 focus:outline-none"
                       />
                     </div>
+                    {activeTuition.startDate && activeTuition.weeklyDays?.length ? (
+                      <div className="mt-2 text-[10px] text-gray-500 dark:text-gray-400">
+                        <span className="font-medium">Schedule:</span>{' '}
+                        {activeTuition.weeklyDays.map((d) => WEEKDAY_SHORT[d]).join(', ')} from {formatDisplayDate(activeTuition.startDate)}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
-                {/* Calendar */}
+                {/* View toggle + Calendar */}
                 <div className="animate-fade-up stagger-2 rounded-3xl border border-green-200 dark:border-green-800/40 bg-white dark:bg-[#121c15] p-4 shadow-sm">
                   <div className="mb-4 flex items-center justify-between">
-                    <button onClick={() => setCalendarDate(new Date(year, month - 1, 1))} className="rounded-xl p-2 transition hover:scale-110 hover:bg-green-50 dark:hover:bg-green-950/40 text-gray-600 dark:text-gray-300">
-                      <ChevronLeft size={18} />
-                    </button>
-                    <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                      {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                    </h3>
-                    <button onClick={() => setCalendarDate(new Date(year, month + 1, 1))} className="rounded-xl p-2 transition hover:scale-110 hover:bg-green-50 dark:hover:bg-green-950/40 text-gray-600 dark:text-gray-300">
-                      <ChevronRight size={18} />
-                    </button>
+                    <div className="flex rounded-xl bg-green-50 dark:bg-green-950/30 p-0.5 border border-green-200 dark:border-green-800/40">
+                      <button
+                        type="button"
+                        onClick={() => setTuitionViewMode('week')}
+                        className={`rounded-lg px-3 py-1.5 text-[10px] font-bold transition ${
+                          tuitionViewMode === 'week' ? 'bg-green-500 text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'
+                        }`}
+                      >
+                        Weekly
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTuitionViewMode('month')}
+                        className={`rounded-lg px-3 py-1.5 text-[10px] font-bold transition ${
+                          tuitionViewMode === 'month' ? 'bg-green-500 text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'
+                        }`}
+                      >
+                        Monthly
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          const d = new Date(calendarDate);
+                          if (tuitionViewMode === 'week') d.setDate(d.getDate() - 7);
+                          else d.setMonth(d.getMonth() - 1);
+                          setCalendarDate(d);
+                        }}
+                        className="rounded-xl p-2 transition hover:scale-110 hover:bg-green-50 dark:hover:bg-green-950/40 text-gray-600 dark:text-gray-300"
+                      >
+                        <ChevronLeft size={18} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          const d = new Date(calendarDate);
+                          if (tuitionViewMode === 'week') d.setDate(d.getDate() + 7);
+                          else d.setMonth(d.getMonth() + 1);
+                          setCalendarDate(d);
+                        }}
+                        className="rounded-xl p-2 transition hover:scale-110 hover:bg-green-50 dark:hover:bg-green-950/40 text-gray-600 dark:text-gray-300"
+                      >
+                        <ChevronRight size={18} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="mb-2 grid grid-cols-7 gap-1 text-center">
-                    {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-                      <span key={day} className="text-[10px] font-bold text-gray-400">{day}</span>
-                    ))}
+
+                  {tuitionViewMode === 'week' ? (
+                    <>
+                      <h3 className="mb-3 text-center text-sm font-bold text-gray-900 dark:text-gray-100">
+                        {weekDates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {' – '}
+                        {weekDates[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </h3>
+                      <div className="grid grid-cols-7 gap-1.5">
+                        {weekDates.map((targetDate) => {
+                          const dateStr = getDateKey(targetDate);
+                          const isLogged = activeProfileSessions.some((s) => getDateKey(s.date) === dateStr);
+                          const isScheduled = activeTuition ? isScheduledTuitionDay(targetDate, activeTuition) : false;
+                          const isToday = dateStr === getDateKey(new Date());
+                          const session = activeProfileSessions.find((s) => getDateKey(s.date) === dateStr);
+                          return (
+                            <button
+                              key={dateStr}
+                              onClick={() => handleDayClick(targetDate)}
+                              className={`cal-day flex flex-col items-center justify-center rounded-xl py-2 text-xs font-bold min-h-[4.5rem] ${
+                                isLogged
+                                  ? 'bg-green-500 text-white shadow-md shadow-green-500/40'
+                                  : isScheduled
+                                    ? 'border-2 border-dashed border-green-400 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300'
+                                    : isToday
+                                      ? 'border-2 border-green-500 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300'
+                                      : 'bg-green-50/50 dark:bg-green-950/10 text-gray-700 dark:text-gray-300 hover:bg-green-100 dark:hover:bg-green-950/40'
+                              }`}
+                            >
+                              <span className="text-[9px] text-gray-400 dark:text-gray-500">{WEEKDAY_SHORT[targetDate.getDay()]}</span>
+                              <span>{targetDate.getDate()}</span>
+                              {session?.transportAmount ? (
+                                <span className={`text-[8px] mt-0.5 ${isLogged ? 'text-green-100' : 'text-gray-400'}`}>
+                                  ৳{session.transportAmount}
+                                  {session.transactionId ? ' ✓' : ''}
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="mb-4 text-center text-sm font-bold text-gray-900 dark:text-gray-100">
+                        {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                      </h3>
+                      <div className="mb-2 grid grid-cols-7 gap-1 text-center">
+                        {WEEKDAY_SHORT.map((day) => (
+                          <span key={day} className="text-[10px] font-bold text-gray-400">{day}</span>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-7 gap-1.5">
+                        {Array.from({ length: firstDayIndex }).map((_, i) => <div key={`empty-${i}`} />)}
+                        {Array.from({ length: daysInMonth }).map((_, i) => {
+                          const dayNum = i + 1;
+                          const targetDate = new Date(year, month, dayNum);
+                          const dateStr = getDateKey(targetDate);
+                          const isLogged = activeProfileSessions.some((s) => getDateKey(s.date) === dateStr);
+                          const isScheduled = activeTuition ? isScheduledTuitionDay(targetDate, activeTuition) : false;
+                          const isToday = dateStr === getDateKey(new Date());
+                          const session = activeProfileSessions.find((s) => getDateKey(s.date) === dateStr);
+                          return (
+                            <button
+                              key={dayNum}
+                              onClick={() => handleDayClick(targetDate)}
+                              className={`cal-day flex h-10 flex-col items-center justify-center rounded-xl text-xs font-bold ${
+                                isLogged
+                                  ? 'bg-green-500 text-white shadow-md shadow-green-500/40'
+                                  : isScheduled
+                                    ? 'border-2 border-dashed border-green-400 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300'
+                                    : isToday
+                                      ? 'border-2 border-green-500 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300'
+                                      : 'bg-green-50/50 dark:bg-green-950/10 text-gray-700 dark:text-gray-300 hover:bg-green-100 dark:hover:bg-green-950/40'
+                              }`}
+                            >
+                              {dayNum}
+                              {session?.transportAmount && isLogged ? (
+                                <span className="text-[7px] text-green-100 leading-none">
+                                  {session.transactionId ? '✓' : '·'}
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap gap-3 text-[10px] text-gray-500 dark:text-gray-400">
+                    <span className="flex items-center gap-1"><span className="h-3 w-3 rounded bg-green-500" /> Attended</span>
+                    <span className="flex items-center gap-1"><span className="h-3 w-3 rounded border-2 border-dashed border-green-400" /> Scheduled</span>
+                    <span className="flex items-center gap-1">✓ Deducted from ledger</span>
                   </div>
-                  <div className="grid grid-cols-7 gap-1.5">
-                    {Array.from({ length: firstDayIndex }).map((_, i) => <div key={`empty-${i}`} />)}
-                    {Array.from({ length: daysInMonth }).map((_, i) => {
-                      const dayNum = i + 1;
-                      const targetDate = new Date(year, month, dayNum);
-                      const dateStr = getDateKey(targetDate);
-                      const isLogged = activeProfileSessions.some(s => getDateKey(s.date) === dateStr);
-                      const isToday = dateStr === getDateKey(new Date());
-                      return (
-                        <button
-                          key={dayNum}
-                          onClick={() => handleDayClick(targetDate)}
-                          className={`cal-day flex h-10 flex-col items-center justify-center rounded-xl text-xs font-bold ${
-                            isLogged
-                              ? 'bg-green-500 text-white shadow-md shadow-green-500/40'
-                              : isToday
-                                ? 'border-2 border-green-500 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300'
-                                : 'bg-green-50/50 dark:bg-green-950/10 text-gray-700 dark:text-gray-300 hover:bg-green-100 dark:hover:bg-green-950/40'
-                          }`}
-                        >
-                          {dayNum}
-                        </button>
-                      );
-                    })}
-                  </div>
+
+                  <p className="mt-3 text-[10px] text-gray-400 text-center">
+                    Tap any day to log or edit a session — including past dates you missed
+                  </p>
                 </div>
               </>
             )}
@@ -1928,6 +2436,7 @@ export default function TrackerApp() {
         onBudget={() => setShowBudgetModal(true)}
       />
 
+      </div>
     </div>
   );
 }

@@ -27,20 +27,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       try {
         if (currentUser) {
+          const uid = currentUser.uid;
           setUser(currentUser);
           try {
-            const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+            const userDoc = await getDoc(doc(db, "users", uid));
+            if (cancelled || auth.currentUser?.uid !== uid) return;
             if (userDoc.exists() && userDoc.data().nickname) {
               setNickname(userDoc.data().nickname);
             } else {
               setNickname(null);
             }
           } catch (error) {
-            console.error("Error fetching user profile:", error);
-            setNickname(null);
+            if (!cancelled && auth.currentUser?.uid === uid) {
+              console.error("Error fetching user profile:", error);
+              setNickname(null);
+            }
           }
         } else {
           setUser(null);
@@ -51,11 +57,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(null);
         setNickname(null);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, []);
 
   const logout = async () => {

@@ -2,8 +2,19 @@
 
 import { useState } from "react";
 import { updatePassword, deleteUser } from "firebase/auth";
-import { doc, deleteDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, deleteDoc } from "firebase/firestore";
 import { db } from "../firebase";
+
+async function deleteUserFirestoreData(uid: string) {
+  const userCollections = ["transactions", "tuition", "tuitionProfiles"] as const;
+  for (const name of userCollections) {
+    const snapshot = await getDocs(query(collection(db, name), where("userId", "==", uid)));
+    await Promise.all(snapshot.docs.map((d) => deleteDoc(d.ref)));
+  }
+  await deleteDoc(doc(db, "budgets", uid));
+  await deleteDoc(doc(db, "users", uid));
+  localStorage.removeItem(`budgets_${uid}`);
+}
 import { useAuth } from "../context/AuthContext";
 import { Moon, Sun } from "lucide-react";
 
@@ -28,7 +39,7 @@ export default function SettingsModal({
       await updatePassword(user, newPassword);
       setStatusMessage("Password updated successfully!");
       setNewPassword("");
-    } catch (err: any) {
+    } catch {
       alert("Requires recent login. Please log out and log back in to change your password.");
     }
   };
@@ -37,10 +48,10 @@ export default function SettingsModal({
     if (!user || !confirm("Are you sure you want to delete your account? This action cannot be undone.")) return;
 
     try {
-      await deleteDoc(doc(db, "users", user.uid));
+      await deleteUserFirestoreData(user.uid);
       await deleteUser(user);
       alert("Account deleted.");
-    } catch (err: any) {
+    } catch (err: unknown) {
       alert("Requires recent login. Please log out and log back in before deleting your account.");
     }
   };

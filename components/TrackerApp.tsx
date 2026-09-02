@@ -710,7 +710,6 @@ export default function TrackerApp() {
               <Wallet size={20} />
             </div>
             <div>
-              <span className="block text-[10px] font-medium uppercase tracking-widest text-green-600">KeepNotes</span>
               <span className="text-sm font-bold text-gray-900">Hi, {nickname} 👋</span>
             </div>
           </div>
